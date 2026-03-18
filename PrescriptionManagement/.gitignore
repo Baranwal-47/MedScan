@@ -1,0 +1,29 @@
+*.tar.gz
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite
+.vite/
+vite.config.ts.*
+
+# TypeScript
+*.tsbuildinfo
+
+package-lock.json
