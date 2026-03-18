@@ -52,35 +52,18 @@ const MyMedicinesPage: React.FC = () => {
   }, [currentPage]);
 
  const fetchMyMedicines = async () => {
-  const token = localStorage.getItem('token');
-  
-  if (!token) {
-    console.error('No token found');
-    setError('Please log in again');
-    return;
-  }
-
   try {
     setLoading(true);
-    const response = await fetch('http://localhost:5000/api/medicines/my-delivered?page=1', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Success:', data);
-      setMedicines(data.data);
-      // Note: This route returns simpler data structure
-    } else {
-      const errorText = await response.text();
-      console.error('Response not ok:', response.status, errorText);
-      setError(`API Error: ${response.status} - ${errorText}`);
+    setError('');
+    const response = await orderAPI.getMyMedicines(currentPage);
+    setMedicines(response.data || []);
+    if (response.stats) {
+      setStats(response.stats);
     }
+    setTotalPages(response.pagination?.totalPages || 1);
   } catch (error) {
     console.error('Fetch error:', error);
-    setError('Network error occurred');
+    setError('Failed to load your delivered medicines');
   } finally {
     setLoading(false);
   }

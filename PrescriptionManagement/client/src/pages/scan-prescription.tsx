@@ -30,6 +30,8 @@ export default function ScanPrescription() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { addToCart } = useCart();
+  const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
+  const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
   
   // Image scanning state
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -44,30 +46,6 @@ export default function ScanPrescription() {
   ]);
   const [searchResults, setSearchResults] = useState<Record<number, SearchResult>>({});
 
-  // OCR mutation
-  const scanMutation = useMutation({
-    mutationFn: async (imageData: string) => {
-      const response = await apiRequest("POST", "/api/scan-prescription", {
-        image: imageData
-      });
-      return response.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Prescription Scanned Successfully",
-        description: `${data.medications?.length || 0} medications found.`,
-      });
-      navigate("/");
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to scan prescription",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  });
-
   // Search medicines mutation
   const searchMutation = useMutation({
     mutationFn: async (meds: ManualMed[]) => {
@@ -78,7 +56,7 @@ export default function ScanPrescription() {
         }
         
         try {
-          const response = await fetch(`http://localhost:5000/api/medicines/search?query=${encodeURIComponent(searchQuery)}`, {
+          const response = await fetch(`${API_BASE_URL}/medicines/search?query=${encodeURIComponent(searchQuery)}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -179,7 +157,45 @@ export default function ScanPrescription() {
   // Process prescription
   const handleProcessPrescription = () => {
     if (capturedImage) {
-      scanMutation.mutate(capturedImage);
+      if (isRecognizing) {
+        toast({
+          title: "Still processing image",
+          description: "Please wait for OCR recognition to finish.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!recognizedText?.trim()) {
+        toast({
+          title: "No text detected",
+          description: "Try a clearer image or switch to manual entry.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const extractedMeds = Array.from(
+        new Set(
+          recognizedText
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length >= 3)
+        )
+      )
+        .slice(0, 8)
+        .map((name) => ({ name, composition: "" }));
+
+      if (extractedMeds.length === 0) {
+        toast({
+          title: "No medicines found",
+          description: "Try manual entry for better results.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      searchMutation.mutate(extractedMeds);
     } else if (manualEntry) {
       // Validate basic fields (just for show)
       if (!doctorName || !prescriptionDate) {
@@ -260,7 +276,7 @@ export default function ScanPrescription() {
                 <Button 
                   className="flex-1" 
                   onClick={handleTakePhoto}
-                  disabled={scanMutation.isPending}
+                  disabled={searchMutation.isPending || addToCartMutation.isPending}
                 >
                   {capturedImage ? "Take New Photo" : "Take Photo"}
                 </Button>
@@ -268,7 +284,7 @@ export default function ScanPrescription() {
                   variant="outline" 
                   className="flex-1"
                   onClick={() => document.getElementById('file-input')?.click()}
-                  disabled={scanMutation.isPending}
+                  disabled={searchMutation.isPending || addToCartMutation.isPending}
                 >
                   Upload Image
                 </Button>
@@ -406,14 +422,15 @@ export default function ScanPrescription() {
             onClick={handleProcessPrescription}
             disabled={
               (!manualEntry && !capturedImage) || 
-              scanMutation.isPending || 
+              isRecognizing ||
+              addToCartMutation.isPending ||
               searchMutation.isPending
             }
           >
-            {scanMutation.isPending || searchMutation.isPending ? (
+            {isRecognizing || searchMutation.isPending ? (
               <>
                 <Loader className="mr-2 h-4 w-4 animate-spin" />
-                {searchMutation.isPending ? "Searching..." : "Processing..."}
+                {searchMutation.isPending ? "Searching..." : "Processing OCR..."}
               </>
             ) : (
               manualEntry ? "Search Medicines" : "Process Prescription"
@@ -424,7 +441,7 @@ export default function ScanPrescription() {
             variant="outline" 
             className="w-full"
             onClick={() => setManualEntry(!manualEntry)}
-            disabled={scanMutation.isPending || searchMutation.isPending}
+            disabled={isRecognizing || addToCartMutation.isPending || searchMutation.isPending}
           >
             {manualEntry ? "📷 Switch to Camera" : "✏️ Enter Manually"}
           </Button>

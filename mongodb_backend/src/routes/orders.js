@@ -6,6 +6,13 @@ const protect = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+  next();
+};
+
 // Helper function to generate order number
 const generateOrderNumber = async () => {
   let orderNumber;
@@ -208,7 +215,7 @@ router.get('/my-medicines', protect, async (req, res) => {
 });
 
 // Admin: Get all orders
-router.get('/admin/all', protect, async (req, res) => {
+router.get('/admin/all', protect, requireAdmin, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -242,7 +249,7 @@ router.get('/admin/all', protect, async (req, res) => {
 });
 
 // Admin: Update order status
-router.put('/admin/:orderId/status', protect, async (req, res) => {
+router.put('/admin/:orderId/status', protect, requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     const validStatuses = ['pending_approval', 'confirmed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];

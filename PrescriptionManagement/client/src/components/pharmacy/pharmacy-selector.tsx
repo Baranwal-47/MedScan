@@ -80,28 +80,22 @@ export default function PharmacySelector({ isOpen, onClose, medications }: Pharm
       const now = new Date();
       const deliveryDate = getEstimatedDeliveryDate(selectedOption.deliveryEstimate);
       
-      // First create the order
-      const response = await apiRequest("POST", "/api/orders", {
-        userId: 1,
-        orderDate: now.toISOString(),
-        status: "ordered",
-        estimatedDelivery: deliveryDate.toISOString(),
-        pharmacy: selectedOption.name,
-        totalItems: medications.length
+      // Backend creates orders from the authenticated user's cart.
+      const response = await apiRequest("POST", "/api/orders/create", {
+        shippingAddress: {
+          name: "MedScan User",
+          phone: "0000000000",
+          address: `${selectedOption.name} fulfillment`,
+          city: "N/A",
+          state: "N/A",
+          zipCode: "00000"
+        },
+        paymentMethod: "cash_on_delivery",
+        doctorName: medications.length > 0 ? "Not Provided" : undefined
       });
       
       const orderResult = await response.json();
-      const orderId = orderResult.id;
-      
-      // Create order items for each medication
-      for (const medication of medications) {
-        await apiRequest("POST", "/api/order-items", {
-          orderId: orderId,
-          medicationId: medication.id,
-          quantity: 1,
-          price: Math.floor(selectedOption.price / medications.length) // Distribute price across items
-        });
-      }
+      console.warn("/api/order-items is not available in mongodb_backend. Order items are derived from cart contents on /api/orders/create.");
       
       return orderResult;
     },

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTesseract } from "@/hooks/use-prescription-scanner";
 
@@ -19,29 +18,48 @@ export default function ScanModal({ isOpen, onClose }: ScanModalProps) {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
   const [manualText, setManualText] = useState("");
+  const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
+  const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
   
   const { recognizeText, isRecognizing, recognizedText } = useTesseract();
 
-  const scanMutation = useMutation({
-    mutationFn: async (imageData: string) => {
-      const response = await apiRequest("POST", "/api/scan-prescription", {
-        image: imageData
+  const searchMutation = useMutation({
+    mutationFn: async (terms: string[]) => {
+      const requests = terms.map(async (term) => {
+        const response = await fetch(`${API_BASE_URL}/medicines/search?query=${encodeURIComponent(term)}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token")}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Search failed for '${term}' with status ${response.status}`);
+        }
+
+        return response.json();
       });
-      return response.json();
+
+      return Promise.all(requests);
     },
-    onSuccess: (data) => {
+    onSuccess: (results) => {
+      const matched = results.reduce((count, res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          return count + 1;
+        }
+        return count;
+      }, 0);
+
       toast({
-        title: "Prescription Scanned Successfully",
-        description: `${data.medications.length} medications found.`,
+        title: "Prescription Processed",
+        description: `${matched} medicine matches found from OCR/manual text.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/prescriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/medications'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/schedules/today'] });
       onClose();
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to scan prescription",
+        title: "Failed to process prescription",
         description: error.message,
         variant: "destructive"
       });
@@ -71,14 +89,63 @@ export default function ScanModal({ isOpen, onClose }: ScanModalProps) {
 
   const handleProcessPrescription = () => {
     if (capturedImage) {
-      scanMutation.mutate(capturedImage);
+      if (isRecognizing) {
+        toast({
+          title: "Still processing image",
+          description: "Please wait for OCR to finish.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!recognizedText?.trim()) {
+        toast({
+          title: "No text detected",
+          description: "Try a clearer image or enter details manually.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const extractedTerms = Array.from(
+        new Set(
+          recognizedText
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length >= 3)
+        )
+      ).slice(0, 8);
+
+      if (extractedTerms.length === 0) {
+        toast({
+          title: "No medicines found",
+          description: "Try manual entry for better results.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      searchMutation.mutate(extractedTerms);
     } else if (manualEntry && manualText) {
-      // Handle manual text entry
-      toast({
-        title: "Manual Entry Submitted",
-        description: "Processing your prescription information.",
-      });
-      onClose();
+      const extractedTerms = Array.from(
+        new Set(
+          manualText
+            .split(/\r?\n|,|;/)
+            .map((line) => line.trim())
+            .filter((line) => line.length >= 3)
+        )
+      ).slice(0, 8);
+
+      if (extractedTerms.length === 0) {
+        toast({
+          title: "Missing Information",
+          description: "Enter at least one medicine name to search.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      searchMutation.mutate(extractedTerms);
     } else {
       toast({
         title: "Missing Information",
@@ -194,12 +261,12 @@ export default function ScanModal({ isOpen, onClose }: ScanModalProps) {
             <Button
               className="w-full sm:w-auto sm:ml-3"
               onClick={handleProcessPrescription}
-              disabled={scanMutation.isPending}
+              disabled={isRecognizing || searchMutation.isPending}
             >
-              {scanMutation.isPending ? (
+              {isRecognizing || searchMutation.isPending ? (
                 <>
                   <Loader className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
+                  {searchMutation.isPending ? "Searching..." : "Processing OCR..."}
                 </>
               ) : (
                 manualEntry ? "Process Text" : "Take Photo"
@@ -210,7 +277,7 @@ export default function ScanModal({ isOpen, onClose }: ScanModalProps) {
               variant="outline"
               className="mt-3 w-full sm:mt-0 sm:w-auto sm:mr-3"
               onClick={() => manualEntry ? setManualEntry(false) : handleFileInputChange}
-              disabled={scanMutation.isPending}
+              disabled={isRecognizing || searchMutation.isPending}
             >
               {manualEntry ? "Cancel" : "Upload Image"}
             </Button>
@@ -219,7 +286,7 @@ export default function ScanModal({ isOpen, onClose }: ScanModalProps) {
               variant="ghost"
               className="mt-3 w-full sm:mt-0 sm:w-auto"
               onClick={() => setManualEntry(!manualEntry)}
-              disabled={scanMutation.isPending}
+              disabled={isRecognizing || searchMutation.isPending}
             >
               <span className="material-icons text-sm mr-2">
                 {manualEntry ? "photo_camera" : "edit"}

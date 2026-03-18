@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import axios from 'axios';
 import { Cart } from '../types/Cart';
 
 const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
@@ -10,9 +10,10 @@ const api = axios.create({
 });
 
 // Add auth token to requests
-api.interceptors.request.use((config: AxiosRequestConfig) => {
+api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token && config.headers) {
+  if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

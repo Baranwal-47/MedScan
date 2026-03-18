@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import axios from 'axios';
 import { Order, ShippingAddress } from '../types/Order';
 
 const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
@@ -10,9 +10,10 @@ const api = axios.create({
 });
 
 // Add auth token to requests
-api.interceptors.request.use((config: AxiosRequestConfig) => {
+api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token && config.headers) {
+  if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -68,14 +69,7 @@ getMyMedicines: async (page: number = 1): Promise<{
   stats: any;
   pagination: any;
 }> => {
-  const token = localStorage.getItem('token');
-  const response = await api.get(`/orders/my-medicines?page=${page}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}` // ✅ Add this
-      }
-    });
+  const response = await api.get(`/orders/my-medicines?page=${page}`);
   return response.data;
 },
 

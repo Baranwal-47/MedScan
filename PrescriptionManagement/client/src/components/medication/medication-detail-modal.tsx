@@ -31,13 +31,17 @@ export default function MedicationDetailModal({ medication, isOpen, onClose }: M
   // Order refill mutation
   const orderRefillMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/orders", {
-        userId: 1,
-        orderDate: new Date().toISOString(),
-        status: "ordered",
-        estimatedDelivery: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-        pharmacy: medication.pharmacy || "MedExpress Pharmacy",
-        totalItems: 1
+      const response = await apiRequest("POST", "/api/orders/create", {
+        shippingAddress: {
+          name: "MedScan User",
+          phone: "0000000000",
+          address: `${medication.pharmacy || "MedExpress Pharmacy"} fulfillment`,
+          city: "N/A",
+          state: "N/A",
+          zipCode: "00000"
+        },
+        paymentMethod: "cash_on_delivery",
+        doctorName: "Not Provided"
       });
       return response.json();
     },
