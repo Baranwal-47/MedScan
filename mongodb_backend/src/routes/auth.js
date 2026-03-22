@@ -8,7 +8,7 @@ const protect = require('../middleware/authMiddleware');
 const router = express.Router();
 
 /* ---------- Helpers ---------- */
-const genToken = id => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn:'1d' });
+const genToken = (id, role) => jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn:'1d' });
 
 /* ---------- Register ---------- */
 router.post('/register', async (req,res) => {
@@ -42,7 +42,7 @@ router.post('/register', async (req,res) => {
 
     res.status(201).json({ 
       message: 'User registered successfully',
-      token: genToken(user._id) 
+      token: genToken(user._id, user.role) 
     });
   } catch (e) { 
     console.error('Registration error:', e);
@@ -65,7 +65,7 @@ router.post('/login', async (req,res) => {
     }
     
     res.json({ 
-      token: genToken(user._id), 
+      token: genToken(user._id, user.role), 
       user: {
         id: user._id,
         name: user.name,

@@ -7,16 +7,16 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isAuthReady, user } = useAuth();
   const [, navigate] = useLocation();
 
   React.useEffect(() => {
-    if (!isAuthenticated && !user) {
+    if (isAuthReady && !isAuthenticated) {
       navigate('/login');
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthReady, isAuthenticated, navigate]);
 
-  if (!isAuthenticated) {
+  if (!isAuthReady || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>

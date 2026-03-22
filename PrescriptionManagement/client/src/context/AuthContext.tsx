@@ -20,6 +20,7 @@ interface AuthContextType {
   resetPassword: (token: string, password: string) => Promise<void>;
   loading: boolean;
   isAuthenticated: boolean;
+  isAuthReady: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
   const API_BASE = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
@@ -36,6 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (token) {
       fetchProfile();
+    } else {
+      setIsAuthReady(true);
     }
   }, [token]);
 
@@ -54,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to fetch profile');
       logout();
+    } finally {
+      setIsAuthReady(true);
     }
   };
 
@@ -161,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       user, token, login, register, logout, updateProfile,
-      forgotPassword, resetPassword, loading, isAuthenticated
+      forgotPassword, resetPassword, loading, isAuthenticated, isAuthReady
     }}>
       {children}
     </AuthContext.Provider>
