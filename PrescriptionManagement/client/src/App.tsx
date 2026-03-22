@@ -53,7 +53,7 @@ function Router() {
             )} 
           /> */}
 
-          <Route path="/profile" component={() => <ProfilePage />} />
+          <Route path="/profile" component={() => <ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
           <Route path="/scan" component={() => <ScanPrescription />} />
 
