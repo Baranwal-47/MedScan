@@ -6,12 +6,22 @@ import { CheckCircle, CreditCard, Smartphone, AlertCircle } from 'lucide-react';
 
 const PaymentPage: React.FC = () => {
   const { orderId } = useParams();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const locationState = (window as any).history.state?.state || {};
+  const {
+    clientSecret: initialClientSecret,
+    paymentIntentId: initialPaymentIntentId,
+    publishableKey: initialPublishableKey
+  } = locationState;
+
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success' | 'failed'>('pending');
   const [error, setError] = useState('');
+  const [clientSecret, setClientSecret] = useState(initialClientSecret || '');
+  const [paymentIntentId, setPaymentIntentId] = useState(initialPaymentIntentId || '');
+  const [publishableKey, setPublishableKey] = useState(initialPublishableKey || '');
 
   useEffect(() => {
     if (orderId) {
@@ -30,26 +40,73 @@ const PaymentPage: React.FC = () => {
     }
   };
 
-  const simulatePayment = async () => {
-    setPaymentLoading(true);
-    setPaymentStatus('processing');
+  const retryStripePayment = async () => {
+    try {
+      setPaymentLoading(true);
+      setPaymentStatus('processing');
+      setError('');
 
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 3000));
+      // If we don't have a clientSecret, create a new payment intent
+      let currentClientSecret = clientSecret;
+      let currentPaymentIntentId = paymentIntentId;
+      let currentPublishableKey = publishableKey;
 
-    // Simulate 90% success rate
-    const success = Math.random() > 0.1;
-    
-    if (success) {
-      setPaymentStatus('success');
-      setTimeout(() => {
-        navigate('/my-orders');
-      }, 2000);
-    } else {
+      if (!currentClientSecret) {
+        const orderData = await orderAPI.getOrder(orderId!);
+        const stripeResponse = await orderAPI.createStripePaymentIntent(orderData.data.totalAmount);
+
+        currentClientSecret = stripeResponse.data.clientSecret;
+        currentPaymentIntentId = stripeResponse.data.paymentIntentId;
+        currentPublishableKey = stripeResponse.data.publishableKey;
+
+        setClientSecret(currentClientSecret);
+        setPaymentIntentId(currentPaymentIntentId);
+        setPublishableKey(currentPublishableKey);
+      }
+
+      // Load Stripe.js
+      await new Promise<void>((resolve, reject) => {
+        if ((window as any).Stripe) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Stripe'));
+        document.body.appendChild(script);
+      });
+
+      const stripe = (window as any).Stripe(currentPublishableKey);
+      const result = await stripe.confirmCardPayment(currentClientSecret, {
+        payment_method: {
+          card: {
+            token: 'tok_visa'
+          }
+        }
+      });
+
+      if (result.error) {
+        setPaymentStatus('failed');
+        setError(result.error.message || 'Payment failed');
+        setPaymentLoading(false);
+        return;
+      }
+
+      if (result.paymentIntent?.status === 'succeeded') {
+        await orderAPI.verifyStripePayment({
+          paymentIntentId: currentPaymentIntentId,
+          mongoOrderId: orderId!
+        });
+        setPaymentStatus('success');
+        setPaymentLoading(false);
+        setTimeout(() => navigate('/my-orders'), 2000);
+      }
+    } catch (err: any) {
       setPaymentStatus('failed');
+      setError('Payment failed. Please try again.');
+      setPaymentLoading(false);
     }
-    
-    setPaymentLoading(false);
   };
 
   const getPaymentIcon = () => {
@@ -73,7 +130,7 @@ const PaymentPage: React.FC = () => {
     );
   }
 
-  if (error || !order) {
+  if (!order) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -126,26 +183,6 @@ const PaymentPage: React.FC = () => {
             <p className="text-gray-600 mb-4">Order #{order.orderNumber}</p>
             <p className="text-sm text-gray-500">Redirecting to your orders...</p>
           </div>
-        ) : paymentStatus === 'failed' ? (
-          <div className="text-center">
-            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Failed</h2>
-            <p className="text-gray-600 mb-6">There was an issue processing your payment.</p>
-            <div className="space-y-3">
-              <button
-                onClick={simulatePayment}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Retry Payment
-              </button>
-              <button
-                onClick={() => navigate('/cart')}
-                className="w-full bg-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-400 transition-colors"
-              >
-                Back to Cart
-              </button>
-            </div>
-          </div>
         ) : (
           <div>
             <div className="text-center mb-6">
@@ -153,7 +190,7 @@ const PaymentPage: React.FC = () => {
                 {getPaymentIcon()}
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {paymentStatus === 'processing' ? 'Processing Payment...' : 'Complete Payment'}
+                {paymentStatus === 'processing' ? 'Processing Payment...' : (paymentStatus === 'failed' ? 'Payment Failed' : 'Complete Payment')}
               </h2>
               <p className="text-gray-600">Order #{order.orderNumber}</p>
             </div>
@@ -179,16 +216,38 @@ const PaymentPage: React.FC = () => {
               </div>
             )}
 
+            {paymentStatus === 'failed' && error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
             <div className="space-y-3">
-              {paymentStatus === 'processing' ? (
+              {paymentStatus === 'failed' ? (
+                <>
+                  <button
+                    onClick={retryStripePayment}
+                    disabled={paymentLoading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    Retry Payment
+                  </button>
+                  <button
+                    onClick={() => navigate('/cart')}
+                    className="w-full bg-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-400 transition-colors"
+                  >
+                    Back to Cart
+                  </button>
+                </>
+              ) : paymentStatus === 'processing' ? (
                 <div className="text-center py-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                  <p className="text-sm text-gray-500">Please wait...</p>
+                  <p className="text-sm text-gray-500">Processing payment...</p>
                 </div>
               ) : (
                 <>
                   <button
-                    onClick={simulatePayment}
+                    onClick={retryStripePayment}
                     disabled={paymentLoading}
                     className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >

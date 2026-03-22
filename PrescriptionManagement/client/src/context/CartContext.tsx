@@ -57,7 +57,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       const response = await cartAPI.updateQuantity(medicineId, quantity);
       setCart(response.data);
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        await fetchCart();
+        return;
+      }
       console.error('Failed to update quantity:', error);
       throw error;
     } finally {
@@ -70,7 +74,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       const response = await cartAPI.removeFromCart(medicineId);
       setCart(response.data);
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        await fetchCart();
+        return;
+      }
       console.error('Failed to remove from cart:', error);
       throw error;
     } finally {

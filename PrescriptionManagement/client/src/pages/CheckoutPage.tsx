@@ -6,7 +6,7 @@ import { ShippingAddress } from '../types/Order';
 import { CreditCard, Smartphone, Truck, MapPin } from 'lucide-react';
 
 const CheckoutPage: React.FC = () => {
-  const { cart, clearCart } = useCart();
+  const { cart, clearCart, refreshCart } = useCart();
   const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -46,6 +46,24 @@ const CheckoutPage: React.FC = () => {
     });
   };
 
+  const handleStripeSuccess = async (
+    paymentIntentId: string,
+    mongoOrderId: string
+  ) => {
+    try {
+      setLoading(true);
+      await orderAPI.verifyStripePayment({
+        paymentIntentId,
+        mongoOrderId
+      });
+      clearCart();
+      navigate('/my-orders');
+    } catch (err: any) {
+      setError('Payment verification failed. Contact support with order ID: ' + mongoOrderId);
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -59,12 +77,55 @@ const CheckoutPage: React.FC = () => {
       };
 
       const response = await orderAPI.createOrder(orderData);
-      
-      // Navigate to payment page with order ID
-      navigate(`/payment/${response.data._id}`);
+      const mongoOrderId = response.data._id;
+
+      // Backend clears cart on order creation; sync local cart state immediately.
+      await refreshCart();
+
+      // For COD, navigate directly to payment page
+      if (paymentMethod === 'cod') {
+        navigate(`/payment/${mongoOrderId}`);
+        return;
+      }
+
+      // For card/upi, proceed with Stripe flow
+      try {
+        const stripeResponse = await orderAPI.createStripePaymentIntent(cart.totalAmount);
+        const { clientSecret, paymentIntentId, publishableKey } = stripeResponse.data;
+
+        // Load Stripe.js dynamically
+        await new Promise<void>((resolve, reject) => {
+          if ((window as any).Stripe) {
+            resolve();
+            return;
+          }
+          const script = document.createElement('script');
+          script.src = 'https://js.stripe.com/v3/';
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Failed to load Stripe'));
+          document.body.appendChild(script);
+        });
+
+        const stripe = (window as any).Stripe(publishableKey);
+        if (!stripe) {
+          throw new Error('Failed to initialize Stripe');
+        }
+
+        // Keep checkout clean; payment is handled on PaymentPage
+        navigate(`/payment/${mongoOrderId}`, {
+          state: {
+            clientSecret,
+            paymentIntentId,
+            publishableKey,
+            amount: cart.totalAmount
+          }
+        });
+      } catch (err: any) {
+        setError('Failed to initialize payment. Please try again.');
+        setLoading(false);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create order');
-    } finally {
       setLoading(false);
     }
   };
@@ -280,7 +341,7 @@ const CheckoutPage: React.FC = () => {
                 disabled={loading}
                 className="w-full mt-4 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Processing...' : 'Place Order'}
+                {loading ? 'Processing...' : paymentMethod === 'cod' ? 'Place Order' : 'Proceed to Payment'}
               </button>
             </div>
           </div>

@@ -339,5 +339,78 @@ router.get('/medicine-history/:medicineId', protect, async (req, res) => {
   }
 });
 
+// Stripe: Create payment intent
+router.post('/stripe/create-payment-intent', protect, async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid amount is required' });
+    }
+
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: 'inr',
+      automatic_payment_methods: { enabled: true }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency,
+        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Stripe: Verify payment
+router.post('/stripe/verify', protect, async (req, res) => {
+  try {
+    const { paymentIntentId, mongoOrderId } = req.body;
+
+    if (!paymentIntentId || !mongoOrderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'paymentIntentId and mongoOrderId are required'
+      });
+    }
+
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment not completed'
+      });
+    }
+
+    const order = await Order.findById(mongoOrderId);
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    order.paymentStatus = 'completed';
+    order.status = 'confirmed';
+    order.stripePaymentIntentId = paymentIntentId;
+
+    await order.save();
+    await order.populate('items.medicine', 'name price image_url composition manufacturer');
+
+    res.json({ success: true, data: order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 module.exports = router;

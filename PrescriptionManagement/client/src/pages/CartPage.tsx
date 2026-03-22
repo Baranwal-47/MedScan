@@ -8,10 +8,22 @@ const CartPage: React.FC = () => {
   const [, navigate] = useLocation();
 
   const handleQuantityChange = async (medicineId: string, newQuantity: number) => {
-    if (newQuantity < 1) {
+    try {
+      if (newQuantity < 1) {
+        await removeFromCart(medicineId);
+      } else {
+        await updateQuantity(medicineId, newQuantity);
+      }
+    } catch (error) {
+      console.error('Failed to update cart item:', error);
+    }
+  };
+
+  const handleRemove = async (medicineId: string) => {
+    try {
       await removeFromCart(medicineId);
-    } else {
-      await updateQuantity(medicineId, newQuantity);
+    } catch (error) {
+      console.error('Failed to remove cart item:', error);
     }
   };
 
@@ -95,7 +107,7 @@ const CartPage: React.FC = () => {
                     <div className="text-right">
                       <p className="text-lg font-bold text-gray-900">{item.price}</p>
                       <button
-                        onClick={() => removeFromCart(item.medicine._id)}
+                        onClick={() => handleRemove(item.medicine._id)}
                         className="text-red-500 hover:text-red-700 transition-colors mt-2"
                       >
                         <Trash2 className="w-4 h-4" />

@@ -83,4 +83,28 @@ getMedicineHistory: async (medicineId: string): Promise<{
   return response.data;
 },
 
+// Create Stripe payment intent
+createStripePaymentIntent: async (amount: number): Promise<{
+  success: boolean;
+  data: {
+    clientSecret: string;
+    paymentIntentId: string;
+    amount: number;
+    currency: string;
+    publishableKey: string;
+  };
+}> => {
+  const response = await api.post('/orders/stripe/create-payment-intent', { amount });
+  return response.data;
+},
+
+// Verify Stripe payment
+verifyStripePayment: async (payload: {
+  paymentIntentId: string;
+  mongoOrderId: string;
+}): Promise<{ success: boolean; data?: any; message?: string }> => {
+  const response = await api.post('/orders/stripe/verify', payload);
+  return response.data;
+},
+
 };
