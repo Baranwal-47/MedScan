@@ -1,8 +1,109 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { orderAPI } from '../services/orderApi';
 import { Order } from '../types/Order';
 import { CheckCircle, CreditCard, Smartphone, AlertCircle } from 'lucide-react';
+
+let stripePromise: any = null;
+const getStripePromise = (publishableKey: string) => {
+  if (!stripePromise) {
+    stripePromise = loadStripe(publishableKey);
+  }
+  return stripePromise;
+};
+
+const StripePaymentForm: React.FC<{
+  orderId: string;
+  clientSecret: string;
+  amount: number;
+  onSuccess: () => void;
+  onError: (message: string) => void;
+}> = ({ orderId, clientSecret, amount, onSuccess, onError }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const [cardError, setCardError] = useState('');
+
+  const handlePay = async () => {
+    if (!stripe || !elements) return;
+
+    setProcessing(true);
+    setCardError('');
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setProcessing(false);
+      return;
+    }
+
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card: cardElement }
+    });
+
+    if (error) {
+      const message = error.message || 'Payment failed';
+      setCardError(message);
+      onError(message);
+      setProcessing(false);
+      return;
+    }
+
+    if (paymentIntent?.status === 'succeeded') {
+      onSuccess();
+      return;
+    }
+
+    const fallbackMessage = 'Payment failed';
+    setCardError(fallbackMessage);
+    onError(fallbackMessage);
+    setProcessing(false);
+  };
+
+  return (
+    <div className="space-y-4" data-order-id={orderId}>
+      <div className="p-4 border border-gray-200 rounded-lg bg-white">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Card Details
+        </label>
+        <CardElement
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#374151',
+                '::placeholder': { color: '#9CA3AF' },
+                fontFamily: 'system-ui, sans-serif'
+              },
+              invalid: { color: '#EF4444' }
+            },
+            hidePostalCode: true
+          }}
+        />
+      </div>
+
+      {cardError && (
+        <p className="text-sm text-red-600">{cardError}</p>
+      )}
+
+      <button
+        onClick={handlePay}
+        disabled={!stripe || processing}
+        className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {processing ? (
+          <span className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            Processing...
+          </span>
+        ) : (
+          `Pay ₹${amount.toFixed(2)}`
+        )}
+      </button>
+    </div>
+  );
+};
 
 const PaymentPage: React.FC = () => {
   const { orderId } = useParams();
@@ -22,6 +123,9 @@ const PaymentPage: React.FC = () => {
   const [clientSecret, setClientSecret] = useState(initialClientSecret || '');
   const [paymentIntentId, setPaymentIntentId] = useState(initialPaymentIntentId || '');
   const [publishableKey, setPublishableKey] = useState(initialPublishableKey || '');
+  const [showCardForm, setShowCardForm] = useState(!!initialClientSecret);
+
+  void location;
 
   useEffect(() => {
     if (orderId) {
@@ -77,36 +181,36 @@ const PaymentPage: React.FC = () => {
         document.body.appendChild(script);
       });
 
-      const stripe = (window as any).Stripe(currentPublishableKey);
-      const result = await stripe.confirmCardPayment(currentClientSecret, {
-        payment_method: {
-          card: {
-            token: 'tok_visa'
-          }
-        }
-      });
-
-      if (result.error) {
-        setPaymentStatus('failed');
-        setError(result.error.message || 'Payment failed');
-        setPaymentLoading(false);
-        return;
-      }
-
-      if (result.paymentIntent?.status === 'succeeded') {
-        await orderAPI.verifyStripePayment({
-          paymentIntentId: currentPaymentIntentId,
-          mongoOrderId: orderId!
-        });
-        setPaymentStatus('success');
-        setPaymentLoading(false);
-        setTimeout(() => navigate('/my-orders'), 2000);
-      }
+      setClientSecret(currentClientSecret);
+      setPaymentIntentId(currentPaymentIntentId);
+      setPublishableKey(currentPublishableKey);
+      setShowCardForm(true);
+      setPaymentStatus('pending');
+      setPaymentLoading(false);
     } catch (err: any) {
       setPaymentStatus('failed');
       setError('Payment failed. Please try again.');
       setPaymentLoading(false);
     }
+  };
+
+  const handlePaymentSuccess = async () => {
+    try {
+      await orderAPI.verifyStripePayment({
+        paymentIntentId,
+        mongoOrderId: orderId!
+      });
+      setPaymentStatus('success');
+      setTimeout(() => navigate('/my-orders'), 2000);
+    } catch (err: any) {
+      setError('Payment verification failed. Contact support.');
+      setPaymentStatus('failed');
+    }
+  };
+
+  const handlePaymentError = (message: string) => {
+    setError(message);
+    setPaymentStatus('failed');
   };
 
   const getPaymentIcon = () => {
@@ -246,13 +350,28 @@ const PaymentPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <button
-                    onClick={retryStripePayment}
-                    disabled={paymentLoading}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    Pay Now
-                  </button>
+                  {showCardForm && clientSecret ? (
+                    <Elements
+                      stripe={getStripePromise(publishableKey)}
+                      options={{ clientSecret }}
+                    >
+                      <StripePaymentForm
+                        orderId={orderId!}
+                        clientSecret={clientSecret}
+                        amount={order.totalAmount}
+                        onSuccess={handlePaymentSuccess}
+                        onError={handlePaymentError}
+                      />
+                    </Elements>
+                  ) : (
+                    <button
+                      onClick={retryStripePayment}
+                      disabled={paymentLoading}
+                      className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      Pay Now
+                    </button>
+                  )}
                   <button
                     onClick={() => navigate('/checkout')}
                     className="w-full bg-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-400 transition-colors"
