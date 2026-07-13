@@ -49,12 +49,7 @@ const SignupPage: React.FC = () => {
     <div className="min-h-screen flex">
       {/* Left side - Image */}
       <div className="hidden lg:block relative w-0 flex-1">
-        <img
-          className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3"
-          alt="Medical background"
-        />
-        <div className="absolute inset-0 bg-green-600 opacity-75"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 via-green-600 to-teal-800"></div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-white">
             <h2 className="text-4xl font-bold mb-4">Join MedScan</h2>

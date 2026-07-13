@@ -8,6 +8,7 @@ interface User {
   role?: string;
   phone?: string;
   gender?: string;
+  avatarUrl?: string;
 }
 
 interface AuthContextType {

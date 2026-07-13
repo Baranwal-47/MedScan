@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useCart } from '../context/CartContext';
 import { orderAPI } from '../services/orderApi';
@@ -23,10 +23,14 @@ const CheckoutPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [doctorName, setDoctorName] = useState('');
 
-  if (!cart || cart.items.length === 0) {
-    navigate('/cart');
-    return null;
-  }
+  const cartEmpty = !cart || cart.items.length === 0;
+
+  // Redirect after render, not during it (React warns otherwise)
+  useEffect(() => {
+    if (cartEmpty) navigate('/cart');
+  }, [cartEmpty]);
+
+  if (cartEmpty) return null;
 
   const hasRxMedicines = cart.items.some(item => item.medicine.prescriptionRequired);
 

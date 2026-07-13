@@ -132,12 +132,7 @@ const LoginPage: React.FC = () => {
 
       {/* Right side - Image */}
       <div className="hidden lg:block relative w-0 flex-1">
-        <img
-          className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3"
-          alt="Medical background"
-        />
-        <div className="absolute inset-0 bg-blue-600 opacity-75"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-blue-800"></div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-white">
             <h2 className="text-4xl font-bold mb-4">MedScan</h2>
