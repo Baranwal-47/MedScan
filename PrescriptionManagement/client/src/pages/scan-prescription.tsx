@@ -7,6 +7,7 @@ import { useTesseract } from "@/hooks/use-prescription-scanner";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 
+import { API_BASE_URL } from "@/lib/apiBase";
 import { Loader, PlusCircle, Trash2, Check, XCircle, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,8 +31,6 @@ export default function ScanPrescription() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { addToCart } = useCart();
-  const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
-  const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
   
   // Image scanning state
   const [capturedImage, setCapturedImage] = useState<string | null>(null);

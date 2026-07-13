@@ -75,14 +75,6 @@ const orderSchema = new mongoose.Schema({
   estimatedDelivery: {
     type: Date
   },
-  razorpayOrderId: {
-    type: String,
-    default: null
-  },
-  razorpayPaymentId: {
-    type: String,
-    default: null
-  },
   stripePaymentIntentId: {
     type: String,
     default: null

@@ -1,13 +1,5 @@
-import axios from 'axios';
 import { MedicineResponse, MedicineDetailResponse } from '../types/Medicine';
-
-const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
-const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-});
+import { api } from '../lib/apiBase';
 
 export const medicineAPI = {
   // Get medicines with search and pagination

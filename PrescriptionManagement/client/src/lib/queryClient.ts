@@ -1,7 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-
-const API_ROOT = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "");
-const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
+import { API_BASE_URL } from "./apiBase";
 
 function resolveApiUrl(url: string): string {
   if (url === '/api') return API_BASE_URL;

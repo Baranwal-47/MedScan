@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { API_BASE_URL } from "@/lib/apiBase";
 import { useTesseract } from "@/hooks/use-prescription-scanner";
 
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,6 @@ export default function ScanModal({ isOpen, onClose }: ScanModalProps) {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
   const [manualText, setManualText] = useState("");
-  const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
-  const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
   
   const { recognizeText, isRecognizing, recognizedText } = useTesseract();
 

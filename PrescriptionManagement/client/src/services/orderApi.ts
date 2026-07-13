@@ -1,23 +1,5 @@
-import axios from 'axios';
 import { Order, ShippingAddress } from '../types/Order';
-
-const API_ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
-const API_BASE_URL = API_ROOT.endsWith('/api') ? API_ROOT : `${API_ROOT}/api`;
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-});
-
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import { api } from '../lib/apiBase';
 
 export const orderAPI = {
   createOrder: async (data: {

@@ -1,4 +1,8 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// ponytail: local DNS refuses SRV lookups (mongodb+srv fails); use public resolvers
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const connectDB = async () => {
   try {
