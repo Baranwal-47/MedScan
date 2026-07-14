@@ -83,14 +83,25 @@ router.post('/scan', protect, upload.single('image'), async (req, res) => {
 
     const uploaded = await uploadBuffer(req.file.buffer, 'prescriptions', req.file.mimetype);
 
-    let { text, engine } = await extractText(req.file.buffer, req.file.mimetype);
-    if (!text.trim() && req.body.clientText?.trim()) {
+    let { text, engine, medicines } = await extractText(req.file.buffer, req.file.mimetype);
+    if (!text.trim() && !medicines?.length && req.body.clientText?.trim()) {
       text = req.body.clientText;
       engine = 'client';
     }
 
-    const names = candidateLines(text);
+    // Gemini returns structured medicines — use those names directly and
+    // skip the line-parsing heuristics.
+    const names = medicines?.length ? medicines.map(m => m.name) : candidateLines(text);
     const { matched, unmatched } = await matchAgainstCatalogue(names);
+
+    // Show dosage/frequency alongside the matched name ("read as ...")
+    if (medicines?.length) {
+      const detail = (name) => {
+        const g = medicines.find(m => m.name === name);
+        return g ? [g.name, g.dosage, g.frequency, g.duration].filter(Boolean).join(' · ') : name;
+      };
+      matched.forEach(m => { m.query = detail(m.query); });
+    }
 
     const prescription = await Prescription.create({
       user: req.user._id,

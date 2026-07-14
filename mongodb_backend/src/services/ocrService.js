@@ -1,5 +1,44 @@
-// Server-side OCR chain: TrOCR (HuggingFace Inference API) → ocr.space →
-// none (caller falls back to client-side Tesseract text if provided).
+// Server-side OCR chain: Gemini vision (structured extraction) → TrOCR
+// (HuggingFace Inference API) → ocr.space → none (caller falls back to
+// client-side Tesseract text if provided).
+
+// Vision-LLM extraction: reads handwriting contextually and returns the
+// medicines as structured data, not just raw characters.
+const geminiVision = async (buffer, mimetype) => {
+  const prompt = `You are reading a doctor's prescription image (often handwritten).
+Return ONLY JSON with this exact shape:
+{"raw_text": "<full transcription of the prescription>",
+ "medicines": [{"name": "<brand name>", "dosage": "<e.g. 625mg>", "frequency": "<e.g. 1-0-1>", "duration": "<e.g. 5 days>"}]}
+Rules:
+- Correct obvious handwriting misreads to real medicine brand names sold in India (e.g. "Angmentin" -> "Augmentin").
+- Include topical/dental products (gels, ointments, drops) as medicines.
+- Do NOT include doctor, clinic, or patient details in "medicines".
+- Omit dosage/frequency/duration fields you cannot read.`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimetype, data: buffer.toString('base64') } },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: { response_mime_type: 'application/json', temperature: 0 }
+      })
+    }
+  );
+  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+  const json = await res.json();
+  const out = (json.candidates?.[0]?.content?.parts || []).map(p => p.text).join('');
+  const parsed = JSON.parse(out);
+  const medicines = (parsed.medicines || []).filter(m => m?.name);
+  if (!medicines.length && !parsed.raw_text?.trim()) throw new Error('Gemini returned nothing usable');
+  return { text: parsed.raw_text || '', medicines };
+};
 
 const trocr = async (buffer) => {
   const res = await fetch(
@@ -36,8 +75,18 @@ const ocrSpace = async (buffer, mimetype) => {
   return text;
 };
 
-// Returns { text, engine }. Never throws — falls through the chain.
+// Returns { text, engine, medicines? }. Never throws — falls through the
+// chain. `medicines` (structured [{name, dosage, frequency, duration}]) is
+// only present for the Gemini engine.
 const extractText = async (buffer, mimetype) => {
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { text, medicines } = await geminiVision(buffer, mimetype);
+      return { text, medicines, engine: 'gemini' };
+    } catch (e) {
+      console.warn('Gemini vision failed, falling back:', e.message);
+    }
+  }
   if (process.env.HUGGINGFACE_API_KEY) {
     try {
       return { text: await trocr(buffer), engine: 'trocr' };

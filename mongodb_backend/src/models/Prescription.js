@@ -16,7 +16,7 @@ const prescriptionSchema = new mongoose.Schema({
   },
   ocrEngine: {
     type: String,
-    enum: ['trocr', 'ocrspace', 'client', 'none'],
+    enum: ['gemini', 'trocr', 'ocrspace', 'client', 'none'],
     default: 'none'
   },
   matchedMedicines: [{
