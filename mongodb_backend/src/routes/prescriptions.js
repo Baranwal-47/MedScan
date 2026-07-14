@@ -48,9 +48,14 @@ const matchAgainstCatalogue = async (names) => {
     if (firstWord.length >= 4) {
       // 1. exact prefix on the brand word
       med = await find(`^${escapeRx(firstWord)}`);
-      // 2. one wrong/extra trailing char: prefix of the first 6 letters
+      // 2. hyphenated brand names ("Pan-D" vs catalogue "Panday D"):
+      // retry with separators collapsed out
+      if (!med && /-/.test(firstWord)) {
+        med = await find(`^${escapeRx(firstWord.replace(/-/g, ''))}`);
+      }
+      // 3. one wrong/extra trailing char: prefix of the first 6 letters
       if (!med && firstWord.length >= 6) med = await find(`^${escapeRx(firstWord.slice(0, 6))}`);
-      // 3. one misread char anywhere: try each position as a wildcard.
+      // 4. one misread char anywhere: try each position as a wildcard.
       // 4-letter fragments fuzz-match everything, so only allow them when
       // the line carries a dose ("ParD 40ng") — a strong medicine signal.
       const hasDose = /\d+\s*(mg|mcg|ml|g|ng|iu)\b/i.test(query);
