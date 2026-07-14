@@ -45,6 +45,22 @@ export const orderAPI = {
     return response.data;
   },
 
+  getAdminStats: async (): Promise<{
+    success: boolean;
+    data: {
+      ordersByStatus: Record<string, number>;
+      totalOrders: number;
+      paidRevenue: number;
+      paidOrders: number;
+      topMedicines: { name: string; qty: number }[];
+      userCount: number;
+      prescriptionsPending: number;
+    };
+  }> => {
+    const response = await api.get('/orders/admin/stats');
+    return response.data;
+  },
+
 
   // Get user's delivered medicines
 getMyMedicines: async (page: number = 1): Promise<{

@@ -270,6 +270,46 @@ router.get('/admin/all', protect, requireAdmin, async (req, res) => {
 });
 
 // Admin: Update order status
+// Admin: dashboard stats
+router.get('/admin/stats', protect, requireAdmin, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const [byStatus, revenueAgg, topMedicines, userCount, rxPending] = await Promise.all([
+      Order.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      Order.aggregate([
+        { $match: { paymentStatus: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$totalAmount' }, orders: { $sum: 1 } } }
+      ]),
+      Order.aggregate([
+        { $unwind: '$items' },
+        { $group: { _id: '$items.medicine', qty: { $sum: '$items.quantity' } } },
+        { $sort: { qty: -1 } },
+        { $limit: 5 },
+        { $lookup: { from: 'medicines', localField: '_id', foreignField: '_id', as: 'medicine' } },
+        { $unwind: '$medicine' },
+        { $project: { name: '$medicine.name', qty: 1 } }
+      ]),
+      User.countDocuments(),
+      Prescription.countDocuments({ status: 'pending' })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        ordersByStatus: Object.fromEntries(byStatus.map(s => [s._id, s.count])),
+        totalOrders: byStatus.reduce((n, s) => n + s.count, 0),
+        paidRevenue: revenueAgg[0]?.total || 0,
+        paidOrders: revenueAgg[0]?.orders || 0,
+        topMedicines,
+        userCount,
+        prescriptionsPending: rxPending
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.put('/admin/:orderId/status', protect, requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;

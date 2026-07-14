@@ -12,9 +12,12 @@ const AdminDashboardPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [stats, setStats] = useState({
     totalOrders: 0,
-    pendingApproval: 0,
-    totalRevenue: 0,
-    todayOrders: 0
+    ordersByStatus: {} as Record<string, number>,
+    paidRevenue: 0,
+    paidOrders: 0,
+    topMedicines: [] as { name: string; qty: number }[],
+    userCount: 0,
+    prescriptionsPending: 0
   });
 
   useEffect(() => {
@@ -37,26 +40,22 @@ const AdminDashboardPage: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      // This would be a separate API endpoint in a real app
-      const allOrders = await orderAPI.getAllOrders(1, '');
-      const pendingOrders = await orderAPI.getAllOrders(1, 'pending_approval');
-      
-      const totalRevenue = allOrders.data.reduce((sum, order) => sum + order.totalAmount, 0);
-      const today = new Date().toDateString();
-      const todayOrders = allOrders.data.filter(order => 
-        new Date(order.orderDate).toDateString() === today
-      ).length;
-
-      setStats({
-        totalOrders: allOrders.pagination.totalCount,
-        pendingApproval: pendingOrders.pagination.totalCount,
-        totalRevenue,
-        todayOrders
-      });
+      const response = await orderAPI.getAdminStats();
+      setStats(response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     }
   };
+
+  // Order pipeline segments — palette validated for CVD + contrast on white
+  const STATUS_SEGMENTS: { key: string; label: string; color: string }[] = [
+    { key: 'pending_approval', label: 'Pending Approval', color: '#d97706' },
+    { key: 'confirmed', label: 'Confirmed', color: '#2563eb' },
+    { key: 'shipped', label: 'Shipped', color: '#0d9488' },
+    { key: 'out_for_delivery', label: 'Out for Delivery', color: '#ea580c' },
+    { key: 'delivered', label: 'Delivered', color: '#16a34a' },
+    { key: 'cancelled', label: 'Cancelled', color: '#dc2626' },
+  ];
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
@@ -153,8 +152,8 @@ const AdminDashboardPage: React.FC = () => {
             <div className="flex items-center">
               <Clock className="w-8 h-8 text-yellow-600" />
               <div className="ml-4">
-                <p className="text-sm text-gray-600">Pending Approval</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.pendingApproval}</p>
+                <p className="text-sm text-gray-600">Rx Awaiting Review</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.prescriptionsPending}</p>
               </div>
             </div>
           </div>
@@ -163,20 +162,80 @@ const AdminDashboardPage: React.FC = () => {
             <div className="flex items-center">
               <DollarSign className="w-8 h-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">₹{stats.totalRevenue.toFixed(2)}</p>
+                <p className="text-sm text-gray-600">Paid Revenue</p>
+                <p className="text-2xl font-bold text-gray-900">₹{stats.paidRevenue.toFixed(2)}</p>
+                <p className="text-xs text-gray-500">{stats.paidOrders} paid order{stats.paidOrders !== 1 ? 's' : ''}</p>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
-              <TrendingUp className="w-8 h-8 text-purple-600" />
+              <Users className="w-8 h-8 text-purple-600" />
               <div className="ml-4">
-                <p className="text-sm text-gray-600">Today's Orders</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.todayOrders}</p>
+                <p className="text-sm text-gray-600">Registered Users</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.userCount}</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Pipeline + top medicines */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Pipeline</h2>
+            {stats.totalOrders > 0 ? (
+              <>
+                <div className="flex h-4 rounded-full overflow-hidden gap-0.5 mb-4">
+                  {STATUS_SEGMENTS.filter(s => (stats.ordersByStatus[s.key] || 0) > 0).map(s => (
+                    <div
+                      key={s.key}
+                      title={`${s.label}: ${stats.ordersByStatus[s.key]}`}
+                      style={{
+                        backgroundColor: s.color,
+                        width: `${(stats.ordersByStatus[s.key] / stats.totalOrders) * 100}%`
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  {STATUS_SEGMENTS.map(s => (
+                    <div key={s.key} className="flex items-center gap-2 text-sm">
+                      <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="text-gray-600 flex-1">{s.label}</span>
+                      <span className="font-medium text-gray-900">{stats.ordersByStatus[s.key] || 0}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">No orders yet.</p>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Medicines</h2>
+            {stats.topMedicines.length > 0 ? (
+              <div className="space-y-3">
+                {stats.topMedicines.map((m) => {
+                  const max = stats.topMedicines[0].qty;
+                  return (
+                    <div key={m.name} className="flex items-center gap-3 text-sm">
+                      <span className="text-gray-700 truncate w-44 shrink-0">{m.name}</span>
+                      <div className="flex-1 bg-gray-100 rounded-full h-3">
+                        <div
+                          className="h-3 rounded-full"
+                          style={{ backgroundColor: '#2563eb', width: `${(m.qty / max) * 100}%` }}
+                        />
+                      </div>
+                      <span className="font-medium text-gray-900 w-8 text-right">{m.qty}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No sales yet.</p>
+            )}
           </div>
         </div>
 
