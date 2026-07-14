@@ -26,7 +26,7 @@ they picked.
 This is the app reading an actual handwritten dental prescription — schedule-level accuracy
 ("Pan-D · 40mg · 1-0-0 (before meals) · 5 days" recovered from cursive):
 
-<p align="center"><img src="assets/scan-flow.png" width="720" alt="Scan flow reading a real handwritten prescription"/></p>
+<p align="center"><img src="assets/scan-hero.png" alt="A real handwritten prescription next to the medicines MedScan extracted and matched, with dosage schedules"/></p>
 
 The clever part is the OCR strategy. Character-level OCR engines can't read doctors'
 handwriting, so the scan endpoint sends the image to **Gemini vision with a structured-JSON
@@ -81,7 +81,7 @@ built-in retry absorbs transient 503s.
 
 <p align="center">
 <img src="assets/admin-dashboard.png" width="49%" alt="Admin dashboard with order pipeline and top medicines"/>
-<img src="assets/my-prescriptions.png" width="49%" alt="Prescription history with review status"/>
+<img src="assets/store.png" width="49%" alt="Medicine store: search, Rx filters, and the 3,023-item catalogue"/>
 </p>
 
 ## Architecture
@@ -105,7 +105,7 @@ flowchart LR
   Client -->|JWT| API
   P --> CLD[(Cloudinary)]
   API --> DB[(MongoDB Atlas)]
-  STRIPE -. payment_intent.succeeded .-> O
+  STRIPE -.->|"payment_intent.succeeded"| O
 ```
 
 Prescription images live on Cloudinary (`prescriptions/`, `profile-photos/`); the document in
