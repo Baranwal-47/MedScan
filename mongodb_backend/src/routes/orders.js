@@ -387,7 +387,9 @@ router.post('/stripe/create-payment-intent', protect, async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100),
       currency: 'inr',
-      automatic_payment_methods: { enabled: true },
+      // Card-only app (confirmCardPayment in PaymentPage) — disallow
+      // redirect-based methods so no return_url is ever required.
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       metadata: orderId ? { orderId } : {}
     });
 
