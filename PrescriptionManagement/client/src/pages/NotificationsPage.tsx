@@ -234,13 +234,24 @@ const NotificationsPage: React.FC = () => {
                         
                         <p className="text-gray-700 mb-3">{notification.message}</p>
                         
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <span>Order #{notification.metadata.orderNumber}</span>
-                          <span>•</span>
-                          <span>{notification.metadata.itemCount} item{notification.metadata.itemCount > 1 ? 's' : ''}</span>
-                          <span>•</span>
-                          <span>₹{notification.metadata.totalAmount.toFixed(2)}</span>
-                        </div>
+                        {/* Reminder notifications carry no order metadata */}
+                        {notification.metadata?.orderNumber && (
+                          <div className="flex items-center space-x-4 text-sm text-gray-600">
+                            <span>Order #{notification.metadata.orderNumber}</span>
+                            {notification.metadata.itemCount != null && (
+                              <>
+                                <span>•</span>
+                                <span>{notification.metadata.itemCount} item{notification.metadata.itemCount > 1 ? 's' : ''}</span>
+                              </>
+                            )}
+                            {notification.metadata.totalAmount != null && (
+                              <>
+                                <span>•</span>
+                                <span>₹{notification.metadata.totalAmount.toFixed(2)}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
