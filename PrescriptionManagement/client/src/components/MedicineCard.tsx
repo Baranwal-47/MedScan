@@ -3,6 +3,8 @@ import { Link } from 'wouter';
 import { Medicine } from '../types/Medicine';
 import { ShieldCheck, ShieldAlert, ShoppingCart, Check } from 'lucide-react'; // 🆕 Icons for prescription
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 interface MedicineCardProps {
   medicine: Medicine;
@@ -10,6 +12,8 @@ interface MedicineCardProps {
 
 const MedicineCard: React.FC<MedicineCardProps> = ({ medicine }) => {
   const { addToCart } = useCart();
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
@@ -17,13 +21,25 @@ const MedicineCard: React.FC<MedicineCardProps> = ({ medicine }) => {
     // Card is wrapped in a Link — don't navigate on button click
     e.preventDefault();
     e.stopPropagation();
+    if (!isAuthenticated) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to add medicines to your cart.',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       setAdding(true);
       await addToCart(medicine._id, 1);
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
-    } catch (error) {
-      console.error('Failed to add to cart:', error);
+    } catch (error: any) {
+      toast({
+        title: 'Could not add to cart',
+        description: error?.response?.data?.message || error?.message || 'Something went wrong.',
+        variant: 'destructive',
+      });
     } finally {
       setAdding(false);
     }

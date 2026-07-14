@@ -1,19 +1,15 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
 import { useTesseract } from "@/hooks/use-prescription-scanner";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 
 import { API_BASE_URL } from "@/lib/apiBase";
-import { Loader, PlusCircle, Trash2, Check, XCircle, ShoppingCart } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Loader, PlusCircle, Trash2, Check, XCircle, ShoppingCart,
+  Camera, Upload, PencilLine, ExternalLink, FileText, ShieldAlert
+} from "lucide-react";
 
 interface ManualMed {
   name: string;
@@ -45,11 +41,14 @@ interface ScanResult {
   ocrEngine: string;
 }
 
+const inputCls =
+  "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none";
+
 export default function ScanPrescription() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { addToCart } = useCart();
-  
+
   // Image scanning state
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
@@ -112,7 +111,7 @@ export default function ScanPrescription() {
         if (!searchQuery.trim()) {
           return { success: true, data: [] };
         }
-        
+
         try {
           const response = await fetch(`${API_BASE_URL}/medicines/search?query=${encodeURIComponent(searchQuery)}`, {
             method: 'GET',
@@ -121,18 +120,18 @@ export default function ScanPrescription() {
               'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
           });
-          
+
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-          
+
           return await response.json();
         } catch (error) {
           console.error('Search request failed:', error);
           return { success: false, data: [] };
         }
       });
-      
+
       return Promise.all(promises);
     },
     onSuccess: (responses) => {
@@ -150,7 +149,7 @@ export default function ScanPrescription() {
           results[idx] = { found: false };
         }
       });
-      
+
       setSearchResults(results);
     },
     onError: (err: any) => {
@@ -193,10 +192,6 @@ export default function ScanPrescription() {
     reader.readAsDataURL(file);
   };
 
-  const handleTakePhoto = () => {
-    document.getElementById('file-input')?.click();
-  };
-
   // Medication management
   const addMedication = () => {
     setMedications([...medications, { name: "", composition: "" }]);
@@ -225,7 +220,6 @@ export default function ScanPrescription() {
       }
       scanMutation.mutate();
     } else if (manualEntry) {
-      // Validate basic fields (just for show)
       if (!doctorName || !prescriptionDate) {
         toast({
           title: "Missing Information",
@@ -234,8 +228,7 @@ export default function ScanPrescription() {
         });
         return;
       }
-      
-      // Search medicines
+
       searchMutation.mutate(medications);
     } else {
       toast({
@@ -246,311 +239,320 @@ export default function ScanPrescription() {
     }
   };
 
+  const busy = isRecognizing || searchMutation.isPending || scanMutation.isPending;
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <h1 className="text-2xl font-semibold mb-6">Scan Prescription</h1>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {manualEntry ? "Enter Prescription Details" : "Capture Prescription Image"}
-          </CardTitle>
-          <CardDescription>
-            {manualEntry 
-              ? "Enter doctor details and medicines to search our database" 
-              : "Take a clear photo of your prescription or upload an image"
-            }
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent>
-          {!manualEntry ? (
-            <div className="space-y-6">
-              {/* Image Upload Section */}
-              <div className="bg-gray-100 rounded-lg overflow-hidden aspect-[4/3] relative flex flex-col items-center justify-center">
-                {capturedImage ? (
-                  <>
-                    <img 
-                      src={capturedImage} 
-                      alt="Captured prescription" 
-                      className="w-full h-full object-contain"
-                    />
-                    <Button
-                      variant="outline"
-                      className="absolute top-2 right-2 bg-white"
-                      onClick={() => { setCapturedImage(null); setScanResult(null); }}
-                    >
-                      Replace
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className="absolute inset-0 border-2 border-dashed border-primary/50 m-6 pointer-events-none"></div>
-                    <span className="text-5xl text-gray-400 mb-2">📷</span>
-                    <p className="text-sm text-gray-500">Position your prescription in the frame</p>
-                  </>
-                )}
-              </div>
-              
-              <input 
-                type="file" 
-                id="file-input" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleFileInputChange}
-              />
-              
-              <div className="flex space-x-3">
-                <Button 
-                  className="flex-1" 
-                  onClick={handleTakePhoto}
-                  disabled={searchMutation.isPending || addToCartMutation.isPending}
-                >
-                  {capturedImage ? "Take New Photo" : "Take Photo"}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => document.getElementById('file-input')?.click()}
-                  disabled={searchMutation.isPending || addToCartMutation.isPending}
-                >
-                  Upload Image
-                </Button>
-              </div>
-              
-              {isRecognizing && (
-                <Alert>
-                  <Loader className="h-4 w-4 animate-spin mr-2" />
-                  <AlertDescription>
-                    Recognizing text in image...
-                  </AlertDescription>
-                </Alert>
-              )}
-              
-              {recognizedText && !scanResult && (
-                <div className="border rounded-md p-3 bg-gray-50">
-                  <Label>Recognized Text (Preview)</Label>
-                  <div className="mt-1 font-mono text-xs max-h-40 overflow-y-auto p-2 bg-white">
-                    {recognizedText}
-                  </div>
-                </div>
-              )}
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-3xl mx-auto px-4">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Scan Prescription</h1>
+        <p className="text-gray-600 mb-6">
+          Upload a photo of your prescription and we'll find the medicines in our store.
+        </p>
 
-              {/* Scan results */}
-              {scanResult && (
-                <div className="space-y-4">
-                  {scanResult.matches.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-medium text-green-700">
-                        Found in our store ({scanResult.matches.length})
-                      </h3>
-                      {scanResult.matches.map((m) => (
-                        <Alert key={m.medicine._id}>
-                          <Check className="h-4 w-4 text-green-600" />
-                          <AlertDescription className="flex items-center justify-between w-full gap-2">
-                            <span className="min-w-0">
-                              <span className="font-medium">{m.medicine.name}</span>
-                              {m.medicine.prescriptionRequired && (
-                                <span className="ml-2 text-xs bg-red-100 text-red-700 px-1 py-0.5 rounded">Rx</span>
-                              )}
-                              <span className="block text-xs text-gray-500">
-                                matched from “{m.query}” · {m.medicine.price}
-                              </span>
-                            </span>
-                            <Button
-                              size="sm"
-                              onClick={() => addToCartMutation.mutate({ medicineId: m.medicine._id })}
-                              disabled={addToCartMutation.isPending}
-                            >
-                              <ShoppingCart className="h-4 w-4 mr-1" />
-                              Add to Cart
-                            </Button>
-                          </AlertDescription>
-                        </Alert>
-                      ))}
-                    </div>
-                  )}
-
-                  {scanResult.unmatched.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-medium text-orange-700">
-                        Not in our catalogue — get them on Tata 1mg
-                      </h3>
-                      {scanResult.unmatched.map((name) => (
-                        <Alert key={name}>
-                          <XCircle className="h-4 w-4 text-orange-500" />
-                          <AlertDescription className="flex items-center justify-between w-full gap-2">
-                            <span className="truncate">{name}</span>
-                            <a
-                              href={`https://www.1mg.com/search/all?name=${encodeURIComponent(name)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-blue-600 hover:underline whitespace-nowrap"
-                            >
-                              View on 1mg →
-                            </a>
-                          </AlertDescription>
-                        </Alert>
-                      ))}
-                    </div>
-                  )}
-
-                  {scanResult.matches.length > 0 && (
-                    <Button className="w-full" onClick={() => navigate('/cart')}>
-                      <ShoppingCart className="h-4 w-4 mr-2" />
-                      Go to Cart
-                    </Button>
-                  )}
-
-                  <p className="text-xs text-gray-500">
-                    Your prescription image was saved and will be attached to your order
-                    for pharmacist review.
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Doctor & Date (for show) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Doctor's Name</Label>
-                  <Input
-                    value={doctorName}
-                    onChange={(e) => setDoctorName(e.target.value)}
-                    placeholder="Dr. Smith"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    value={prescriptionDate}
-                    onChange={(e) => setPrescriptionDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Medicines */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium">Medicines</h3>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addMedication}
-                  >
-                    <PlusCircle className="h-4 w-4 mr-1" />
-                    Add Medicine
-                  </Button>
-                </div>
-
-                {medications.map((med, idx) => (
-                  <div key={idx} className="border rounded-md p-4 space-y-4 bg-gray-50">
-                    {medications.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeMedication(idx)}
-                        className="absolute top-2 right-2 text-red-500 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Medicine Name</Label>
-                        <Input
-                          value={med.name}
-                          onChange={(e) => updateMedication(idx, "name", e.target.value)}
-                          placeholder="Paracetamol"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Composition</Label>
-                        <Input
-                          value={med.composition}
-                          onChange={(e) => updateMedication(idx, "composition", e.target.value)}
-                          placeholder="Acetaminophen 500mg"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Search Results */}
-                    {searchResults[idx] && (
-                      <Alert variant={searchResults[idx].found ? "default" : "destructive"}>
-                        {searchResults[idx].found ? (
-                          <>
-                            <Check className="h-4 w-4 text-green-600" />
-                            <AlertDescription className="flex items-center justify-between w-full">
-                              <span>
-                                Found: {searchResults[idx].medicineName} 
-                                ({searchResults[idx].stock} in stock)
-                              </span>
-                              <Button
-                                size="sm"
-                                onClick={() => addToCartMutation.mutate({
-                                  medicineId: searchResults[idx].medicineId!
-                                })}
-                                disabled={addToCartMutation.isPending}
-                              >
-                                <ShoppingCart className="h-4 w-4 mr-1" />
-                                Add to Cart
-                              </Button>
-                            </AlertDescription>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="h-4 w-4 text-red-600" />
-                            <AlertDescription>
-                              Medicine not found in our database
-                            </AlertDescription>
-                          </>
-                        )}
-                      </Alert>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-        
-        <CardFooter className="flex flex-col space-y-3">
-          <Button
-            className="w-full"
-            onClick={handleProcessPrescription}
-            disabled={
-              (!manualEntry && !capturedImage) ||
-              isRecognizing ||
-              addToCartMutation.isPending ||
-              searchMutation.isPending ||
-              scanMutation.isPending
-            }
+        {/* Mode toggle */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setManualEntry(false)}
+            disabled={busy}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              !manualEntry
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
           >
-            {isRecognizing || searchMutation.isPending || scanMutation.isPending ? (
-              <>
-                <Loader className="mr-2 h-4 w-4 animate-spin" />
-                {scanMutation.isPending ? "Scanning prescription..."
-                  : searchMutation.isPending ? "Searching..." : "Processing OCR..."}
-              </>
+            <Camera className="w-4 h-4" />
+            Scan image
+          </button>
+          <button
+            onClick={() => setManualEntry(true)}
+            disabled={busy}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              manualEntry
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            <PencilLine className="w-4 h-4" />
+            Enter manually
+          </button>
+        </div>
+
+        {!manualEntry ? (
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <input
+              type="file"
+              id="file-input"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileInputChange}
+            />
+
+            {capturedImage ? (
+              <div className="relative rounded-lg overflow-hidden bg-gray-100">
+                <img
+                  src={capturedImage}
+                  alt="Captured prescription"
+                  className="w-full max-h-96 object-contain"
+                />
+                <button
+                  onClick={() => { setCapturedImage(null); setScanResult(null); }}
+                  className="absolute top-3 right-3 px-3 py-1.5 bg-white text-gray-700 text-sm font-medium rounded-lg shadow hover:bg-gray-100"
+                >
+                  Replace
+                </button>
+              </div>
             ) : (
-              manualEntry ? "Search Medicines" : "Process Prescription"
+              <label
+                htmlFor="file-input"
+                className="flex flex-col items-center justify-center gap-3 py-16 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50/40 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Upload className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-gray-900">Click to upload a prescription</p>
+                  <p className="text-sm text-gray-500 mt-1">or take a photo — JPG or PNG, up to 10&nbsp;MB</p>
+                </div>
+              </label>
             )}
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={() => setManualEntry(!manualEntry)}
-            disabled={isRecognizing || addToCartMutation.isPending || searchMutation.isPending}
-          >
-            {manualEntry ? "📷 Switch to Camera" : "✏️ Enter Manually"}
-          </Button>
-        </CardFooter>
-      </Card>
+
+            {isRecognizing && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <Loader className="w-4 h-4 animate-spin text-blue-600" />
+                Recognizing text in image...
+              </div>
+            )}
+
+            {recognizedText && !scanResult && (
+              <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-2">
+                  <FileText className="w-4 h-4" />
+                  Recognized text (preview)
+                </p>
+                <div className="font-mono text-xs text-gray-600 max-h-40 overflow-y-auto p-2 bg-white rounded border border-gray-100 whitespace-pre-wrap">
+                  {recognizedText}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={handleProcessPrescription}
+              disabled={!capturedImage || busy}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {scanMutation.isPending || isRecognizing ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  {scanMutation.isPending ? "Scanning prescription..." : "Processing OCR..."}
+                </>
+              ) : (
+                "Find my medicines"
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Doctor's Name</label>
+                <input
+                  className={inputCls}
+                  value={doctorName}
+                  onChange={(e) => setDoctorName(e.target.value)}
+                  placeholder="Dr. Smith"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={prescriptionDate}
+                  onChange={(e) => setPrescriptionDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">Medicines</h3>
+                <button
+                  type="button"
+                  onClick={addMedication}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Add medicine
+                </button>
+              </div>
+
+              {medications.map((med, idx) => (
+                <div key={idx} className="relative border border-gray-200 rounded-lg p-4 space-y-4 bg-gray-50">
+                  {medications.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeMedication(idx)}
+                      className="absolute top-2 right-2 text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Medicine Name</label>
+                      <input
+                        className={inputCls}
+                        value={med.name}
+                        onChange={(e) => updateMedication(idx, "name", e.target.value)}
+                        placeholder="Paracetamol"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Composition</label>
+                      <input
+                        className={inputCls}
+                        value={med.composition}
+                        onChange={(e) => updateMedication(idx, "composition", e.target.value)}
+                        placeholder="Acetaminophen 500mg"
+                      />
+                    </div>
+                  </div>
+
+                  {searchResults[idx] && (
+                    searchResults[idx].found ? (
+                      <div className="flex items-center justify-between gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <span className="flex items-center gap-2 text-sm text-green-800 min-w-0">
+                          <Check className="w-4 h-4 shrink-0" />
+                          <span className="truncate">Found: {searchResults[idx].medicineName}</span>
+                        </span>
+                        <button
+                          onClick={() => addToCartMutation.mutate({ medicineId: searchResults[idx].medicineId! })}
+                          disabled={addToCartMutation.isPending}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          Add to Cart
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                        <XCircle className="w-4 h-4 shrink-0" />
+                        Medicine not found in our database
+                      </div>
+                    )
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleProcessPrescription}
+              disabled={busy}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {searchMutation.isPending ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                "Search medicines"
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Scan results */}
+        {scanResult && !manualEntry && (
+          <div className="mt-6 space-y-6">
+            {scanResult.matches.length > 0 && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <Check className="w-5 h-5 mr-2 text-green-600" />
+                  Found in our store ({scanResult.matches.length})
+                </h2>
+                <div className="space-y-3">
+                  {scanResult.matches.map((m) => (
+                    <div
+                      key={m.medicine._id}
+                      className="flex items-center justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-lg"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          {m.medicine.name}
+                          {m.medicine.prescriptionRequired && (
+                            <span className="ml-2 inline-flex items-center text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                              <ShieldAlert className="w-3 h-3 mr-1" />
+                              Rx
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          read as “{m.query}”{m.medicine.price ? ` · ${m.medicine.price}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => addToCartMutation.mutate({ medicineId: m.medicine._id })}
+                        disabled={addToCartMutation.isPending || !m.medicine.price}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        Add to Cart
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {scanResult.unmatched.length > 0 && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center">
+                  <XCircle className="w-5 h-5 mr-2 text-orange-500" />
+                  Not in our catalogue
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  We couldn't match these lines — they may be available on Tata 1mg.
+                </p>
+                <div className="space-y-2">
+                  {scanResult.unmatched.map((name) => (
+                    <div
+                      key={name}
+                      className="flex items-center justify-between gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                    >
+                      <span className="text-sm text-gray-700 truncate">{name}</span>
+                      <a
+                        href={`https://www.1mg.com/search/all?name=${encodeURIComponent(name)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline whitespace-nowrap"
+                      >
+                        View on 1mg
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {scanResult.matches.length > 0 && (
+              <button
+                onClick={() => navigate('/cart')}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Go to Cart
+              </button>
+            )}
+
+            <p className="text-xs text-gray-500 text-center">
+              Your prescription image was saved and will be attached to your order for pharmacist review.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
