@@ -29,6 +29,7 @@ import MyOrdersPage from "@/pages/MyOrdersPage";
 import AdminDashboardPage from "@/pages/AdminDashboardPage";
 import { CartProvider } from "./context/CartContext";
 import MyMedicinesPage from "@/pages/MyMedicinesPage";
+import MyPrescriptionsPage from "@/pages/MyPrescriptionsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 
 function Router() {
@@ -65,6 +66,11 @@ function Router() {
           <Route
             path="/prescriptions/:id"
             component={() => <PrescriptionDetail />}
+          />
+
+          <Route
+            path="/my-prescriptions"
+            component={() => <ProtectedRoute><MyPrescriptionsPage /></ProtectedRoute>}
           />
 
           <Route path="/" component={() => <StorePage />} />

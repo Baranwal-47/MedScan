@@ -71,6 +71,7 @@ export default function Header() {
     { name: "Store", href: "/" },
     { name: "My Medicines", href: "/my-medicines" },
     { name: "My Orders", href: "/my-orders" },
+    { name: "My Prescriptions", href: "/my-prescriptions" },
     { name: "Scan Prescription", href: "/scan" },
   ];
 
