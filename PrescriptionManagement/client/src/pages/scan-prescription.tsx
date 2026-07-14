@@ -4,11 +4,12 @@ import { useLocation } from "wouter";
 import { useTesseract } from "@/hooks/use-prescription-scanner";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 import { API_BASE_URL } from "@/lib/apiBase";
 import {
   Loader, PlusCircle, Trash2, Check, XCircle, ShoppingCart,
-  Camera, Upload, PencilLine, ExternalLink, FileText, ShieldAlert
+  Camera, Upload, PencilLine, ExternalLink, ShieldAlert
 } from "lucide-react";
 
 interface ManualMed {
@@ -48,12 +49,15 @@ export default function ScanPrescription() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { addToCart } = useCart();
+  const { isAuthenticated } = useAuth();
 
   // Image scanning state
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const { recognizeText, isRecognizing, recognizedText } = useTesseract();
+  // Tesseract runs silently in the background — its text is only the
+  // last-resort fallback sent to the server; never shown to the user.
+  const { recognizeText, recognizedText } = useTesseract();
 
   // Server-side scan: uploads the image, OCRs it (TrOCR → ocr.space →
   // client Tesseract text), matches against the catalogue, stores the
@@ -209,15 +213,18 @@ export default function ScanPrescription() {
 
   // Process prescription
   const handleProcessPrescription = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to scan prescriptions.',
+        variant: 'destructive'
+      });
+      navigate('/login');
+      return;
+    }
     if (capturedImage && !manualEntry) {
-      if (isRecognizing) {
-        toast({
-          title: "Still processing image",
-          description: "Please wait for OCR recognition to finish.",
-          variant: "destructive"
-        });
-        return;
-      }
+      // Tesseract may still be running — it's only the last-resort fallback
+      // text, the server scan (Gemini) doesn't need it.
       scanMutation.mutate();
     } else if (manualEntry) {
       if (!doctorName || !prescriptionDate) {
@@ -239,7 +246,7 @@ export default function ScanPrescription() {
     }
   };
 
-  const busy = isRecognizing || searchMutation.isPending || scanMutation.isPending;
+  const busy = searchMutation.isPending || scanMutation.isPending;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -316,34 +323,15 @@ export default function ScanPrescription() {
               </label>
             )}
 
-            {isRecognizing && (
-              <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <Loader className="w-4 h-4 animate-spin text-blue-600" />
-                Recognizing text in image...
-              </div>
-            )}
-
-            {recognizedText && !scanResult && (
-              <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-2">
-                  <FileText className="w-4 h-4" />
-                  Recognized text (preview)
-                </p>
-                <div className="font-mono text-xs text-gray-600 max-h-40 overflow-y-auto p-2 bg-white rounded border border-gray-100 whitespace-pre-wrap">
-                  {recognizedText}
-                </div>
-              </div>
-            )}
-
             <button
               onClick={handleProcessPrescription}
               disabled={!capturedImage || busy}
               className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {scanMutation.isPending || isRecognizing ? (
+              {scanMutation.isPending ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  {scanMutation.isPending ? "Scanning prescription..." : "Processing OCR..."}
+                  Reading your prescription with AI...
                 </>
               ) : (
                 "Find my medicines"

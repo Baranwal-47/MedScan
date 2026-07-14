@@ -81,11 +81,18 @@ const ocrSpace = async (buffer, mimetype) => {
 // only present for the Gemini engine.
 const extractText = async (buffer, mimetype) => {
   if (process.env.GEMINI_API_KEY) {
-    try {
-      const { text, medicines } = await geminiVision(buffer, mimetype);
-      return { text, medicines, engine: 'gemini' };
-    } catch (e) {
-      console.warn('Gemini vision failed, falling back:', e.message);
+    // Free-tier Gemini throws transient 429/503s — retry twice before
+    // falling back to the lower-quality engines.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const { text, medicines } = await geminiVision(buffer, mimetype);
+        return { text, medicines, engine: 'gemini' };
+      } catch (e) {
+        const transient = /HTTP (429|5\d\d)/.test(e.message);
+        console.warn(`Gemini vision attempt ${attempt} failed:`, e.message);
+        if (!transient || attempt === 3) break;
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+      }
     }
   }
   if (process.env.HUGGINGFACE_API_KEY) {
