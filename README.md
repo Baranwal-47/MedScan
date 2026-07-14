@@ -1,484 +1,225 @@
-# MedScan — AI-Powered Medicine Delivery & Prescription Management Platform
+<div align="center">
 
-> A full-stack medicine e-commerce platform with AI-assisted prescription scanning, real-time order tracking, automated medicine reminders, and integrated payment processing built for the Indian healthcare market.
+![MedScan](assets/banner.svg)
 
----
+**Photograph a doctor's handwritten prescription and check out with the right medicines in under a minute — vision-LLM OCR, a 3,023-medicine catalogue, Stripe payments, and a pharmacist approval queue, verified end-to-end against a real dental prescription.**
 
-## 📋 Table of Contents
+![React](https://img.shields.io/badge/React_18-TypeScript-61DAFB?logo=react&logoColor=white&labelColor=0d1117)
+![Node](https://img.shields.io/badge/Express-MongoDB_Atlas-3fb950?logo=node.js&logoColor=white&labelColor=0d1117)
+![Gemini](https://img.shields.io/badge/OCR-Gemini_Vision-39c5cf?logo=googlegemini&logoColor=white&labelColor=0d1117)
+![Stripe](https://img.shields.io/badge/Payments-Stripe_+_Webhooks-635bff?logo=stripe&logoColor=white&labelColor=0d1117)
+![Cloudinary](https://img.shields.io/badge/Media-Cloudinary-d29922?logo=cloudinary&logoColor=white&labelColor=0d1117)
 
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [System Architecture](#system-architecture)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [API Reference](#api-reference)
-- [Project Structure](#project-structure)
-- [USPs](#unique-selling-points)
+[Live app](https://med-scan-rosy.vercel.app) · [API](https://medscan-backend-77bx.onrender.com/api/health)
 
----
+</div>
 
-## Overview
+## What it does
 
-MedScan is a production-grade medicine delivery platform that solves a real problem in Indian healthcare — the friction between a patient receiving a prescription and actually getting their medicines. 
+MedScan is a full e-pharmacy: a patient photographs a prescription, a vision LLM reads the
+handwriting and returns each medicine with its dosage and schedule, matched items go straight
+into a cart backed by a 3,023-medicine catalogue scraped from 1mg, payment runs through Stripe,
+and prescription-required orders are held for a pharmacist who reviews the original image
+before approving. Reminders then nag the patient by email and in-app notification at the times
+they picked.
 
-The platform combines a scraped catalogue of **3,028 real medicines** from 1mg.com, AI-powered **handwritten prescription OCR** using TrOCR/Donut transformer models, **automated medicine reminders**, and a full e-commerce pipeline with Stripe payment processing.
+This is the app reading an actual handwritten dental prescription — schedule-level accuracy
+("Pan-D · 40mg · 1-0-0 (before meals) · 5 days" recovered from cursive):
 
-Patients can scan a handwritten prescription, have medicines auto-identified and added to cart, pay securely, and track their order — all in one flow. Medicines not available in the catalogue redirect directly to Tata 1mg for fulfilment, ensuring zero dead ends for the patient.
+<p align="center"><img src="assets/scan-flow.png" width="720" alt="Scan flow reading a real handwritten prescription"/></p>
 
----
+The clever part is the OCR strategy. Character-level OCR engines can't read doctors'
+handwriting, so the scan endpoint sends the image to **Gemini vision with a structured-JSON
+prompt** — the model corrects misreads to real Indian brand names ("Angmentin" → Augmentin)
+and returns `{name, dosage, frequency, duration}` per medicine. The chain degrades gracefully:
+Gemini (with 429/503 retry) → TrOCR → ocr.space → on-device Tesseract, and a fuzzy matcher
+(dose-form stripping, hyphen collapsing, single-character wildcard regex) rescues whatever the
+weaker engines misread.
 
-## Key Features
+## Verified end-to-end
 
-### 🔬 AI Prescription Scanner
-- Handwritten prescription OCR using **TrOCR** (Microsoft) and **Donut** transformer models — handles real doctor handwriting, not just printed text
-- Falls back to **Tesseract.js** for client-side processing when server OCR is unavailable
-- Extracted medicine names matched against the 3,028-medicine catalogue using fuzzy search
-- Medicines found in catalogue → auto-added to cart
-- Medicines not found → redirect to **Tata 1mg** product search page
-- Prescription image stored securely on **Cloudinary**
-- Prescription linked to order for pharmacist review
+Real captured run of [`mongodb_backend/scripts/e2e-demo.mjs`](mongodb_backend/scripts/e2e-demo.mjs)
+against the handwritten prescription above — scan to paid order, including a signature-verified
+Stripe webhook:
 
-### 💊 Medicine Catalogue
-- **3,028 medicines** scraped from 1mg.com using Puppeteer with full metadata:
-  - Name, composition, manufacturer, price
-  - Uses, side effects, dosage instructions
-  - Prescription requirement flag (Rx)
-  - Product images
-- Full-text search with fuzzy matching
-- Filter by category, price range, prescription requirement
-- Pagination with infinite scroll support
-
-### 🛒 E-Commerce Pipeline
-- Cart management with quantity controls and real-time total calculation
-- Checkout with full Indian address format support
-- **Stripe payment integration** with Elements card form (test + live mode)
-- Cash on Delivery (COD) support
-- Order confirmation with estimated delivery dates
-- Prescription-required medicines routed to pharmacist approval queue before dispatch
-
-### 📋 Prescription & OTP Approval Flow
-- Orders containing Rx medicines enter `pending_approval` status
-- Pharmacist/admin reviews prescription image on admin dashboard
-- One-time approval triggers order to `confirmed` status
-- Patient notified via in-app notification on approval
-- Doctor name and license number captured at checkout for compliance
-
-### 🔔 Medicine Reminders & Notifications
-- Automated reminder system for ordered medicines
-- Configurable reminder schedules: morning / afternoon / night / custom
-- In-app notification centre with unread count badge
-- Notifications triggered on:
-  - Order confirmed
-  - Order shipped
-  - Out for delivery
-  - Order delivered
-  - Prescription approved/rejected
-  - Medicine reminder alerts
-- Mark as read / mark all read / delete functionality
-
-### 👤 User Management
-- JWT-based authentication with secure token refresh
-- Registration, login, forgot password, reset password via email
-- Profile management with **Cloudinary** avatar upload
-- Order history with full medicine purchase timeline
-- My Medicines — full history of all delivered medicines across orders
-- Medicine-level purchase history for tracking chronic medication usage
-
-### 🛡️ Admin Dashboard
-- Role-based access control (`user` / `admin`)
-- Full order management: view, filter by status, update status
-- Order status pipeline: `pending_approval → confirmed → shipped → out_for_delivery → delivered → cancelled`
-- Prescription review queue
-- Medicine catalogue management
-- User management
-
-### 🔐 Security
-- JWT authentication with Bearer token pattern
-- Route-level admin guard with role verification
-- Rate limiting on auth endpoints
-- Helmet.js security headers
-- CORS configuration
-- Payment signature verification (Stripe webhook pattern)
-- Prescription data handled as sensitive — stored on Cloudinary, not in DB blobs
-
----
-
-## Tech Stack
-
-### Frontend
-| Technology | Purpose |
-|---|---|
-| React 18 + TypeScript | UI framework |
-| Wouter | Lightweight client-side routing |
-| TanStack Query (React Query) | Server state management, caching |
-| Axios | HTTP client with interceptors |
-| Tailwind CSS | Utility-first styling |
-| shadcn/ui + Radix UI | Accessible component library |
-| Framer Motion | Animations |
-| @stripe/react-stripe-js | Stripe Elements card form |
-| @stripe/stripe-js | Stripe.js loader |
-| Tesseract.js | Client-side OCR fallback |
-| Lucide React | Icon library |
-| Vite | Build tool and dev server |
-
-### Backend
-| Technology | Purpose |
-|---|---|
-| Node.js + Express | REST API server |
-| Mongoose + MongoDB Atlas | Database and ODM |
-| JWT (jsonwebtoken) | Authentication |
-| bcryptjs | Password hashing |
-| Stripe Node SDK | Payment processing |
-| Nodemailer | Transactional email (password reset, notifications) |
-| Multer | File upload handling |
-| Cloudinary | Prescription image and avatar storage |
-| Helmet | Security headers |
-| express-rate-limit | Auth route rate limiting |
-| crypto (built-in) | Payment signature verification |
-
-### AI / OCR
-| Technology | Purpose |
-|---|---|
-| TrOCR (Microsoft) | Transformer-based handwritten text recognition |
-| Donut (Naver) | Document understanding for structured prescriptions |
-| Tesseract.js | Client-side OCR fallback |
-| Fuzzy search | Medicine name matching from OCR output |
-
-### Scraping
-| Technology | Purpose |
-|---|---|
-| Puppeteer | Headless Chrome for 1mg.com scraping |
-| MongoDB Native Driver | Direct DB writes during scrape |
-
-### Infrastructure
-| Technology | Purpose |
-|---|---|
-| MongoDB Atlas | Cloud database (prescription-medicine cluster) |
-| Cloudinary | Media storage (prescriptions, avatars) |
-| Stripe | Payment processing (test + live) |
-
----
-
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Browser Client                        │
-│         React + TypeScript + TanStack Query             │
-│                  Port 3000                              │
-└─────────────────────┬───────────────────────────────────┘
-                      │ VITE_API_URL (all API calls)
-                      │ Bearer JWT token
-                      ▼
-┌─────────────────────────────────────────────────────────┐
-│                  mongodb_backend                         │
-│              Node.js + Express                          │
-│                  Port 5000                              │
-│                                                         │
-│  /api/auth          /api/medicines    /api/cart         │
-│  /api/orders        /api/notifications                  │
-│  /api/prescriptions /api/reminders                      │
-└──────────┬──────────────────────┬───────────────────────┘
-           │                      │
-           ▼                      ▼
-┌──────────────────┐   ┌──────────────────────────────────┐
-│  MongoDB Atlas   │   │         External Services        │
-│                  │   │                                  │
-│  - Users         │   │  Stripe API (payments)           │
-│  - Medicines     │   │  Cloudinary (images)             │
-│  - Orders        │   │  Nodemailer / SMTP (email)       │
-│  - Cart          │   │  TrOCR / Donut (OCR)             │
-│  - Notifications │   │  Tata 1mg (redirect fallback)    │
-│  - Prescriptions │   └──────────────────────────────────┘
-│  - Reminders     │
-└──────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│              scraping_backend (offline tool)             │
-│         Puppeteer → 1mg.com → MongoDB Atlas             │
-│              3,028 medicines seeded                     │
-└─────────────────────────────────────────────────────────┘
+```text
+$ node scripts/e2e-demo.mjs rx.jpg
+PASS | login
+PASS | scan | engine=gemini
+       matched   Augmentin 1000 Duo Tablet  <- "Augmentin · 625mg · 1-0-1 · 5 days"
+       matched   Panday D 10mg/40mg Tablet  <- "Pan-D · 40mg · 1-0-0 · 5 days"
+       not in catalogue: Enzoflam
+       not in catalogue: Hexigel gum paint
+PASS | cart add | total=INR 630
+PASS | order create | #ORD1784033469229222 status=pending_approval prescription=attached
+PASS | payment intent | pi_3Tt5nm05QLy6j9Aq1yvXupcP
+PASS | stripe confirm | status=succeeded
+PASS | webhook | HTTP 200
+PASS | order paid | paymentStatus=completed status=pending_approval
 ```
 
----
+All four medicines on the page were extracted; the two "not in catalogue" lines are correct —
+those products genuinely aren't in the store, so the UI offers a Tata 1mg search link instead.
+Scans typically take 10–25 s (measured), occasionally longer under Gemini free-tier load — the
+built-in retry absorbs transient 503s.
 
-## Getting Started
+## By the numbers (measured)
 
-### Prerequisites
-- Node.js 18+
-- MongoDB Atlas account (or local MongoDB)
-- Stripe account (test keys)
-- Cloudinary account (free tier)
+| Metric | Value |
+|---|---|
+| Catalogue size | 3,023 medicines scraped from 1mg (name, composition, price, Rx flag, images) |
+| Handwritten test Rx | 4/4 medicines extracted with dosage + schedule; 2/2 catalogue items matched |
+| E2E pipeline | 8/8 steps pass, scan → paid order, webhook signature-verified |
+| Production webhook | Delivered by Stripe to the Render deployment and processed (order marked paid) |
+| OCR chain depth | 4 engines with graceful degradation |
 
-### Installation
+## Highlights
+
+- **Vision-LLM OCR with structured extraction** — not a text dump: each medicine arrives as
+  `{name, dosage, frequency, duration}`, with handwriting misreads corrected by the model itself.
+- **Hand-built fuzzy medicine matcher** — dose-form prefix stripping (`Tab.`/`Cap.`/`Inj.`),
+  brace-grouped meal-instruction splitting, hyphen collapsing ("Pan-D" → "Panday D"), and
+  single-substitution wildcard regexes so one misread character still finds the right product.
+- **Real payment lifecycle** — card-only payment intents (`allow_redirects: 'never'`), raw-body
+  webhook mounted before the JSON parser for signature verification, idempotent order updates
+  keyed on `metadata.orderId`.
+- **Pharmacist compliance loop** — Rx orders enter `pending_approval`; admins see the original
+  prescription image and approve/reject; the decision syncs the prescription record and
+  notifies the patient in-app + by email.
+- **OTP-verified signup** — 6-digit emailed code, 15-minute expiry, account rolled back if the
+  email can't be sent, unverified logins re-issue a fresh code.
+- **Medicine reminders** — morning/afternoon/night presets or custom times, a 1-minute
+  scheduler tick, delivered as in-app notifications and templated emails.
+- **Admin analytics** — MongoDB aggregation endpoint (orders by status, paid revenue, top
+  medicines) feeding a dashboard with a colorblind-validated status palette.
+
+<p align="center">
+<img src="assets/admin-dashboard.png" width="49%" alt="Admin dashboard with order pipeline and top medicines"/>
+<img src="assets/my-prescriptions.png" width="49%" alt="Prescription history with review status"/>
+</p>
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Client [React 18 + TS + Vite]
+    SCAN[Scan page] --> STORE[Store / Cart]
+    STORE --> CHECKOUT[Checkout + Stripe Elements]
+    ADMIN[Admin dashboard]
+  end
+  subgraph API [Express + Mongoose]
+    P["/prescriptions/scan"] --> OCR{OCR chain}
+    OCR -->|primary| GEM[Gemini vision]
+    OCR -->|fallbacks| FB[TrOCR → ocr.space → Tesseract]
+    P --> MATCH[Fuzzy catalogue matcher]
+    O["/orders"] --> STRIPE[Stripe PI + webhook]
+    R["/reminders"] --> SCHED[1-min scheduler]
+    SCHED --> MAIL[Nodemailer]
+  end
+  Client -->|JWT| API
+  P --> CLD[(Cloudinary)]
+  API --> DB[(MongoDB Atlas)]
+  STRIPE -. payment_intent.succeeded .-> O
+```
+
+Prescription images live on Cloudinary (`prescriptions/`, `profile-photos/`); the document in
+Mongo stores the extracted text, engine used, matches, and review status, and is linked to the
+order so the pharmacist sees exactly what the patient uploaded.
+
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/medscan.git
-cd medscan
-
-# Install backend dependencies
+# backend
 cd mongodb_backend
-npm install
+cp .env.example .env        # fill in Mongo, Stripe test keys, Gemini, Cloudinary, SMTP
+npm install && npm start    # http://localhost:5001/api/health
 
-# Install frontend dependencies
-cd ../PrescriptionManagement
-npm install
-```
-
-### Running the app
-
-```bash
-# Terminal 1 — Backend
-cd mongodb_backend
-npm run dev
-# Runs on http://localhost:5000
-
-# Terminal 2 — Frontend
+# frontend (separate terminal)
 cd PrescriptionManagement
-npm run dev
-# Runs on http://localhost:3000
+cp .env.example .env
+npm install && npm run dev  # http://localhost:3000
 ```
 
-### Seeding Medicine Data
+Try it: sign up (a real verification code is emailed), scan a prescription photo, add matches
+to the cart, and pay with Stripe's test card `4242 4242 4242 4242`. The full pipeline check is
+`node scripts/e2e-demo.mjs <prescription-image>` from `mongodb_backend/`.
 
-```bash
-# Run scraper (only needed once)
-cd scraping_backend/node-scraper
-npm install
-npm start
-# Scrapes 1mg.com and seeds 3,028 medicines into MongoDB
-```
+## API surface
 
-### Creating Admin Account
+| Route | What it does |
+|---|---|
+| `POST /api/prescriptions/scan` | image → OCR chain → structured medicines → catalogue matches |
+| `POST /api/auth/register` → `POST /api/auth/verify-email` | OTP signup handshake |
+| `POST /api/orders/create` | cart → order, attaches prescription, doctor name + license |
+| `POST /api/orders/stripe/create-payment-intent` | card-only PI with `orderId` metadata |
+| `POST /api/orders/stripe/webhook` | signature-verified, marks orders paid/failed |
+| `GET /api/orders/admin/stats` | aggregation: pipeline counts, revenue, top medicines |
+| `POST /api/reminders` | per-medicine schedules (presets + custom `HH:MM`) |
 
-```bash
-# After registering your account via the app:
-cd mongodb_backend
-# Edit scripts/setAdmin.js — set TARGET_EMAIL to your email
-node src/scripts/setAdmin.js
-# Your account now has role: "admin"
-```
-
----
-
-## Environment Variables
-
-### `mongodb_backend/.env`
-
-```env
-# Database
-MONGO_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/
-MONGO_DB_NAME=prescription-medicine
-PORT=5000
-
-# Auth
-JWT_SECRET=your_jwt_secret_here
-NODE_ENV=development
-
-# Frontend (for CORS)
-FRONTEND_URL=http://localhost:3000
-
-# Email (password reset, notifications)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_app_password
-
-# Stripe
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_PUBLISHABLE_KEY=pk_test_...
-
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-```
-
-### `PrescriptionManagement/.env`
-
-```env
-VITE_API_URL=http://localhost:5000
-PORT=3000
-```
-
-### `scraping_backend/node-scraper/.env`
-
-```env
-MONGO_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/
-MONGO_DB_NAME=prescription-medicine
-```
-
----
-
-## API Reference
-
-### Auth
-```
-POST   /api/auth/register
-POST   /api/auth/login
-POST   /api/auth/forgot-password
-POST   /api/auth/reset/:token
-GET    /api/auth/profile          (auth required)
-PUT    /api/auth/profile          (auth required)
-```
-
-### Medicines
-```
-GET    /api/medicines
-GET    /api/medicines/search
-GET    /api/medicines/stats
-GET    /api/medicines/:id
-GET    /api/medicines/my          (auth required)
-GET    /api/medicines/my-delivered (auth required)
-GET    /api/medicines/history/:id  (auth required)
-```
-
-### Cart
-```
-GET    /api/cart                  (auth required)
-POST   /api/cart/add              (auth required)
-PUT    /api/cart/update           (auth required)
-DELETE /api/cart/remove/:id       (auth required)
-DELETE /api/cart/clear            (auth required)
-```
-
-### Orders
-```
-POST   /api/orders/create                    (auth required)
-GET    /api/orders/my-orders                 (auth required)
-GET    /api/orders/my-medicines              (auth required)
-GET    /api/orders/:orderId                  (auth required)
-GET    /api/orders/medicine-history/:id      (auth required)
-POST   /api/orders/stripe/create-payment-intent (auth required)
-POST   /api/orders/stripe/verify             (auth required)
-GET    /api/orders/admin/all                 (admin only)
-PUT    /api/orders/admin/:orderId/status     (admin only)
-```
-
-### Notifications
-```
-GET    /api/notifications                    (auth required)
-GET    /api/notifications/unread-count       (auth required)
-PUT    /api/notifications/:id/read           (auth required)
-PUT    /api/notifications/mark-all-read      (auth required)
-DELETE /api/notifications/:id                (auth required)
-```
-
-### Prescriptions
-```
-POST   /api/prescriptions/scan               (auth required)
-GET    /api/prescriptions/:id                (auth required)
-```
-
----
-
-## Project Structure
+## Project layout
 
 ```
-MedScan/
-├── mongodb_backend/               # Express API server
-│   ├── src/
-│   │   ├── models/                # Mongoose schemas
-│   │   │   ├── User.js            # role: user|admin
-│   │   │   ├── Medicine.js        # 3028 scraped medicines
-│   │   │   ├── Order.js           # Full order lifecycle
-│   │   │   ├── Cart.js
-│   │   │   ├── Notification.js
-│   │   │   └── Prescription.js
-│   │   ├── routes/                # Express routers
-│   │   │   ├── auth.js
-│   │   │   ├── medicines.js
-│   │   │   ├── orders.js          # Stripe endpoints here
-│   │   │   ├── cart.js
-│   │   │   ├── notification.js
-│   │   │   └── prescriptions.js
-│   │   ├── middleware/
-│   │   │   ├── authMiddleware.js  # JWT verification
-│   │   │   ├── auth.js            # Rate limiting
-│   │   │   └── errorHandler.js
-│   │   ├── config/
-│   │   │   ├── database.js        # MongoDB Atlas connection
-│   │   │   ├── cloudinary.js      # Cloudinary config
-│   │   │   └── email.js           # Nodemailer config
-│   │   ├── scripts/
-│   │   │   └── setAdmin.js        # One-time admin promotion
-│   │   └── server.js              # App entry point
-│   └── package.json
-│
-├── PrescriptionManagement/        # React frontend
-│   ├── client/
-│   │   └── src/
-│   │       ├── components/
-│   │       │   ├── layout/        # Header, mobile nav
-│   │       │   ├── medication/    # Medicine cards, modals
-│   │       │   ├── orders/        # Order tracker
-│   │       │   ├── pharmacy/      # Pharmacy selector
-│   │       │   ├── prescription/  # Scan modal, card
-│   │       │   ├── ui/            # shadcn components
-│   │       │   ├── AdminRoute.tsx # role === admin guard
-│   │       │   └── ProtectedRoute.tsx
-│   │       ├── context/
-│   │       │   ├── AuthContext.tsx # JWT + user state
-│   │       │   └── CartContext.tsx
-│   │       ├── pages/
-│   │       │   ├── StorePage.tsx       # Medicine catalogue
-│   │       │   ├── CartPage.tsx
-│   │       │   ├── CheckoutPage.tsx    # Stripe initiation
-│   │       │   ├── PaymentPage.tsx     # Stripe Elements form
-│   │       │   ├── MyOrdersPage.tsx
-│   │       │   ├── AdminDashboardPage.tsx
-│   │       │   ├── scan-prescription.tsx # OCR flow
-│   │       │   └── ...
-│   │       ├── services/
-│   │       │   ├── api.ts
-│   │       │   ├── orderApi.ts    # Stripe functions here
-│   │       │   ├── cartApi.ts
-│   │       │   └── notificationApi.ts
-│   │       └── lib/
-│   │           ├── queryClient.ts # VITE_API_URL resolver
-│   │           └── tesseract.ts   # Client OCR fallback
-│   └── server/
-│       ├── index.ts               # Thin Express host
-│       └── vite.ts                # Dev/prod serving
-│
-└── scraping_backend/
-    └── node-scraper/
-        └── scraper.js             # Puppeteer 1mg scraper
+mongodb_backend/          Express API
+  src/services/ocrService.js       Gemini vision + 3-stage fallback chain
+  src/routes/prescriptions.js      scan endpoint + fuzzy catalogue matcher
+  src/routes/stripeWebhook.js      raw-body signature verification
+  src/services/reminderScheduler.js
+  scripts/e2e-demo.mjs             the verified scan→paid-order pipeline
+PrescriptionManagement/   React 18 + TypeScript client (Vite, Tailwind, React Query)
+  client/src/pages/scan-prescription.tsx
+  client/src/pages/AdminDashboardPage.tsx
+scraping_backend/         Puppeteer scraper that built the 3,023-medicine catalogue
 ```
 
----
+## Technical notes
 
-## Unique Selling Points
+<details>
+<summary><b>Why an LLM instead of OCR — and what the fallback chain buys</b></summary>
 
-### 1. Real Medicine Data — Not Dummy Content
-3,028 medicines scraped from 1mg.com with real names, compositions, manufacturers, pricing, and medical metadata. This is actual inventory data, not placeholder content.
+TrOCR and ocr.space read the printed letterhead fine but produced "Angmentin", "ParD 40ng",
+"Enzoflamn" from the handwriting. Gemini reads the same image contextually — it knows "Tab.
+Angmentin 625mg" must be Augmentin — and the structured-JSON prompt (`response_mime_type:
+application/json`, temperature 0) makes the output machine-usable, not just human-readable.
+Every engine below Gemini stays wired in: a scan never hard-fails because one vendor is down,
+and the response records which engine produced it (`ocrEngine`), which the UI surfaces as an
+"AI Vision" badge.
+</details>
 
-### 2. Handwritten Prescription OCR
-Most medicine platforms require manual search. MedScan uses **TrOCR** and **Donut** transformer models to read actual doctor handwriting from prescription photos — the hardest OCR problem in healthcare. Tesseract.js provides a client-side fallback for printed prescriptions.
+<details>
+<summary><b>The fuzzy matcher that rescues weaker engines</b></summary>
 
-### 3. Zero Dead Ends
-If a prescribed medicine isn't in the MedScan catalogue, the patient is automatically redirected to **Tata 1mg** with the medicine name pre-filled in the search. No patient ever hits a wall.
+When a scan does degrade to character-level OCR, `matchAgainstCatalogue` still recovers most
+medicines: it strips dose-form prefixes, splits brace-grouped meal instructions, ignores
+contact/header lines, then tries (1) exact brand-word prefix, (2) hyphen-collapsed prefix,
+(3) first-6-letters prefix, (4) a `$or` of single-character wildcard regexes — so exactly one
+misread letter anywhere in the word still matches. Four-letter fragments only get fuzzed when
+the line carries a dose (`40mg`), which killed the false positives ("avee" no longer matches
+Avencobal) without losing real drugs.
+</details>
 
-### 4. Full Rx Compliance Flow
-Prescription-required medicines don't just get flagged — they enter a real pharmacist approval queue. Orders are held at `pending_approval`, the pharmacist reviews the uploaded prescription on the admin dashboard, and approval triggers automatic order progression and patient notification.
+<details>
+<summary><b>Stripe integration details that usually bite people</b></summary>
 
-### 5. Medicine History Intelligence
-The platform tracks every medicine a patient has ever ordered and delivered — not just orders. Patients can see per-medicine purchase history, useful for chronic medication management and reorder timing.
+The webhook route is mounted with `express.raw()` <em>before</em> the global JSON parser —
+signature verification needs the untouched body bytes. Payment intents are created with
+`automatic_payment_methods: {enabled, allow_redirects: 'never'}` because the client uses
+card-only `confirmCardPayment`; without that, Stripe demands a `return_url` and confirms fail
+(found via Stripe's own integration-failure email, reproduced, fixed, and re-verified against
+the deployed backend with a real Stripe-delivered event).
+</details>
 
-### 6. Indian Payment Stack
-Built specifically for India — UPI, RuPay, and card support via Stripe, plus Cash on Delivery. Payment amounts in INR with paise-level precision.
+<details>
+<summary><b>Email as a first-class channel</b></summary>
 
----
+One nodemailer transport backs four flows: OTP verification (with account rollback if the send
+fails — no stranded half-accounts), password reset, order-status updates mirrored from every
+in-app notification, and scheduled medicine reminders. All sends are fire-and-forget wrappers
+that no-op without SMTP creds, so email being down never breaks an API request.
+</details>
 
-## Development Phases
+Natural extensions: catalogue category/price filters, an order-tracking timeline, moving the
+reminder scheduler to a job queue for multi-instance deployments.
 
-| Phase | Focus | Status |
-|---|---|---|
-| Phase 1 | Architecture cleanup, unified API routing, auth, medicine catalogue, cart | ✅ Complete |
-| Phase 2 | Role-based admin, Stripe payment integration, order confirmation pipeline | ✅ Complete |
-| Phase 3 | TrOCR/Donut server-side OCR, prescription storage, Cloudinary integration, notification triggers, order tracker real-time | ✅ Complete |
-| Phase 4 | Medicine reminders, Tata 1mg redirect fallback, profile avatar upload, reorder flow, mobile UX polish | ✅ Complete |
-
----
+Built to prove one thing: a single developer can ship a regulated-commerce flow — AI intake,
+payments, human review, and lifecycle notifications — that survives real handwriting and real
+webhooks.

@@ -1,0 +1,52 @@
+<svg width="880" height="200" viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="55%" stop-color="#101826"/>
+      <stop offset="100%" stop-color="#0d1420"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="45%" stop-color="#39c5cf"/>
+      <stop offset="100%" stop-color="#3fb950"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="880" height="200" fill="url(#bg)"/>
+
+  <!-- watermark: Rx symbol -->
+  <text x="770" y="165" font-family="Georgia, serif" font-size="150" font-weight="bold"
+        fill="#1c2a3f" opacity="0.55">R</text>
+  <text x="838" y="182" font-family="Georgia, serif" font-size="80" font-weight="bold"
+        fill="#1c2a3f" opacity="0.55">x</text>
+
+  <!-- motif: pill capsule -->
+  <g transform="translate(700,38) rotate(28)">
+    <rect x="0" y="0" width="64" height="26" rx="13" fill="#2563eb"/>
+    <rect x="32" y="0" width="32" height="26" rx="13" fill="#3fb950"/>
+    <rect x="30" y="0" width="4" height="26" fill="#0d1117"/>
+  </g>
+  <!-- motif: scan frame around capsule -->
+  <g stroke="#39c5cf" stroke-width="2.5" fill="none" opacity="0.9">
+    <path d="M676 22 h14 M676 22 v14"/>
+    <path d="M792 22 h-14 M792 22 v14"/>
+    <path d="M676 96 h14 M676 96 v-14"/>
+    <path d="M792 96 h-14 M792 96 v-14"/>
+  </g>
+  <line x1="676" y1="60" x2="792" y2="60" stroke="#39c5cf" stroke-width="1.5" opacity="0.65" stroke-dasharray="5 4"/>
+
+  <!-- title -->
+  <text x="46" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="46" font-weight="700" fill="#e6edf3">
+    MedScan
+  </text>
+  <text x="46" y="108" font-family="Segoe UI, Arial, sans-serif" font-size="17" fill="#9baec8">
+    Reads real doctors' handwriting — 3,023-medicine catalogue, Stripe payments, pharmacist review
+  </text>
+
+  <rect x="46" y="126" width="560" height="3" rx="1.5" fill="url(#rule)"/>
+
+  <!-- pipeline -->
+  <text x="46" y="158" font-family="Cascadia Mono, Consolas, monospace" font-size="14.5">
+    <tspan fill="#58a6ff">scan Rx</tspan><tspan fill="#6e7681"> → </tspan><tspan fill="#39c5cf">Gemini vision</tspan><tspan fill="#6e7681"> → </tspan><tspan fill="#bc8cff">match catalogue</tspan><tspan fill="#6e7681"> → </tspan><tspan fill="#d29922">Stripe</tspan><tspan fill="#6e7681"> → </tspan><tspan fill="#3fb950">pharmacist approve</tspan><tspan fill="#6e7681"> → </tspan><tspan fill="#e6edf3">deliver</tspan>
+  </text>
+</svg>
