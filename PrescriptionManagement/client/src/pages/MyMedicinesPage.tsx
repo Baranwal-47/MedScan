@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { orderAPI } from '../services/orderApi';
+import { reminderAPI, Reminder } from '../services/reminderApi';
+import ReminderButton from '../components/ReminderButton';
 import { Pill, Calendar, Package, ShieldAlert, ShieldCheck, TrendingUp, Clock, Eye } from 'lucide-react';
 
 interface DeliveredMedicine {
@@ -47,9 +49,21 @@ const MyMedicinesPage: React.FC = () => {
   const [medicineHistory, setMedicineHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  const [reminders, setReminders] = useState<Record<string, Reminder>>({});
+
   useEffect(() => {
     fetchMyMedicines();
   }, [currentPage]);
+
+  useEffect(() => {
+    reminderAPI.getReminders()
+      .then(res => {
+        const byMedicine: Record<string, Reminder> = {};
+        res.data.forEach(r => { if (r.medicine) byMedicine[r.medicine._id] = r; });
+        setReminders(byMedicine);
+      })
+      .catch(() => {});
+  }, []);
 
  const fetchMyMedicines = async () => {
   try {
@@ -241,7 +255,7 @@ const MyMedicinesPage: React.FC = () => {
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="flex space-x-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           <button
                             onClick={() => handleViewHistory(medicine)}
                             className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center justify-center"
@@ -255,6 +269,16 @@ const MyMedicinesPage: React.FC = () => {
                           >
                             Reorder
                           </Link>
+                          <ReminderButton
+                            medicineId={medicine.medicine._id}
+                            existing={reminders[medicine.medicine._id] ?? null}
+                            onChange={(r) => setReminders(prev => {
+                              const next = { ...prev };
+                              if (r) next[medicine.medicine._id] = r;
+                              else delete next[medicine.medicine._id];
+                              return next;
+                            })}
+                          />
                         </div>
                       </div>
                     </div>

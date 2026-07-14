@@ -27,6 +27,24 @@ interface SearchResult {
   stock?: number;
 }
 
+interface ScanMatch {
+  medicine: {
+    _id: string;
+    name: string;
+    price: string;
+    prescriptionRequired?: boolean;
+    manufacturer?: string;
+  };
+  query: string;
+}
+
+interface ScanResult {
+  prescriptionId: string;
+  matches: ScanMatch[];
+  unmatched: string[];
+  ocrEngine: string;
+}
+
 export default function ScanPrescription() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -35,7 +53,48 @@ export default function ScanPrescription() {
   // Image scanning state
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const { recognizeText, isRecognizing, recognizedText } = useTesseract();
+
+  // Server-side scan: uploads the image, OCRs it (TrOCR → ocr.space →
+  // client Tesseract text), matches against the catalogue, stores the
+  // prescription for pharmacist review at checkout.
+  const scanMutation = useMutation({
+    mutationFn: async (): Promise<ScanResult> => {
+      const blob = await (await fetch(capturedImage!)).blob();
+      const form = new FormData();
+      form.append('image', blob, 'prescription.png');
+      if (recognizedText?.trim()) form.append('clientText', recognizedText);
+
+      const res = await fetch(`${API_BASE_URL}/prescriptions/scan`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: form
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || 'Scan failed');
+      return json.data;
+    },
+    onSuccess: (data) => {
+      setScanResult(data);
+      // Checkout attaches this prescription to the order
+      sessionStorage.setItem('prescriptionId', data.prescriptionId);
+      if (data.matches.length === 0 && data.unmatched.length === 0) {
+        toast({
+          title: 'No medicines recognized',
+          description: 'Try a clearer photo or manual entry.',
+          variant: 'destructive'
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Scan failed',
+        description: err.message ?? "Couldn't process the prescription",
+        variant: 'destructive'
+      });
+    }
+  });
 
   // Manual entry state
   const [doctorName, setDoctorName] = useState("");
@@ -155,7 +214,7 @@ export default function ScanPrescription() {
 
   // Process prescription
   const handleProcessPrescription = () => {
-    if (capturedImage) {
+    if (capturedImage && !manualEntry) {
       if (isRecognizing) {
         toast({
           title: "Still processing image",
@@ -164,37 +223,7 @@ export default function ScanPrescription() {
         });
         return;
       }
-
-      if (!recognizedText?.trim()) {
-        toast({
-          title: "No text detected",
-          description: "Try a clearer image or switch to manual entry.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const extractedMeds = Array.from(
-        new Set(
-          recognizedText
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length >= 3)
-        )
-      )
-        .slice(0, 8)
-        .map((name) => ({ name, composition: "" }));
-
-      if (extractedMeds.length === 0) {
-        toast({
-          title: "No medicines found",
-          description: "Try manual entry for better results.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      searchMutation.mutate(extractedMeds);
+      scanMutation.mutate();
     } else if (manualEntry) {
       // Validate basic fields (just for show)
       if (!doctorName || !prescriptionDate) {
@@ -246,10 +275,10 @@ export default function ScanPrescription() {
                       alt="Captured prescription" 
                       className="w-full h-full object-contain"
                     />
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="absolute top-2 right-2 bg-white"
-                      onClick={() => setCapturedImage(null)}
+                      onClick={() => { setCapturedImage(null); setScanResult(null); }}
                     >
                       Replace
                     </Button>
@@ -298,12 +327,85 @@ export default function ScanPrescription() {
                 </Alert>
               )}
               
-              {recognizedText && (
+              {recognizedText && !scanResult && (
                 <div className="border rounded-md p-3 bg-gray-50">
                   <Label>Recognized Text (Preview)</Label>
                   <div className="mt-1 font-mono text-xs max-h-40 overflow-y-auto p-2 bg-white">
                     {recognizedText}
                   </div>
+                </div>
+              )}
+
+              {/* Scan results */}
+              {scanResult && (
+                <div className="space-y-4">
+                  {scanResult.matches.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="font-medium text-green-700">
+                        Found in our store ({scanResult.matches.length})
+                      </h3>
+                      {scanResult.matches.map((m) => (
+                        <Alert key={m.medicine._id}>
+                          <Check className="h-4 w-4 text-green-600" />
+                          <AlertDescription className="flex items-center justify-between w-full gap-2">
+                            <span className="min-w-0">
+                              <span className="font-medium">{m.medicine.name}</span>
+                              {m.medicine.prescriptionRequired && (
+                                <span className="ml-2 text-xs bg-red-100 text-red-700 px-1 py-0.5 rounded">Rx</span>
+                              )}
+                              <span className="block text-xs text-gray-500">
+                                matched from “{m.query}” · {m.medicine.price}
+                              </span>
+                            </span>
+                            <Button
+                              size="sm"
+                              onClick={() => addToCartMutation.mutate({ medicineId: m.medicine._id })}
+                              disabled={addToCartMutation.isPending}
+                            >
+                              <ShoppingCart className="h-4 w-4 mr-1" />
+                              Add to Cart
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      ))}
+                    </div>
+                  )}
+
+                  {scanResult.unmatched.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="font-medium text-orange-700">
+                        Not in our catalogue — get them on Tata 1mg
+                      </h3>
+                      {scanResult.unmatched.map((name) => (
+                        <Alert key={name}>
+                          <XCircle className="h-4 w-4 text-orange-500" />
+                          <AlertDescription className="flex items-center justify-between w-full gap-2">
+                            <span className="truncate">{name}</span>
+                            <a
+                              href={`https://www.1mg.com/search/all?name=${encodeURIComponent(name)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-blue-600 hover:underline whitespace-nowrap"
+                            >
+                              View on 1mg →
+                            </a>
+                          </AlertDescription>
+                        </Alert>
+                      ))}
+                    </div>
+                  )}
+
+                  {scanResult.matches.length > 0 && (
+                    <Button className="w-full" onClick={() => navigate('/cart')}>
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                      Go to Cart
+                    </Button>
+                  )}
+
+                  <p className="text-xs text-gray-500">
+                    Your prescription image was saved and will be attached to your order
+                    for pharmacist review.
+                  </p>
                 </div>
               )}
             </div>
@@ -416,20 +518,22 @@ export default function ScanPrescription() {
         </CardContent>
         
         <CardFooter className="flex flex-col space-y-3">
-          <Button 
+          <Button
             className="w-full"
             onClick={handleProcessPrescription}
             disabled={
-              (!manualEntry && !capturedImage) || 
+              (!manualEntry && !capturedImage) ||
               isRecognizing ||
               addToCartMutation.isPending ||
-              searchMutation.isPending
+              searchMutation.isPending ||
+              scanMutation.isPending
             }
           >
-            {isRecognizing || searchMutation.isPending ? (
+            {isRecognizing || searchMutation.isPending || scanMutation.isPending ? (
               <>
                 <Loader className="mr-2 h-4 w-4 animate-spin" />
-                {searchMutation.isPending ? "Searching..." : "Processing OCR..."}
+                {scanMutation.isPending ? "Scanning prescription..."
+                  : searchMutation.isPending ? "Searching..." : "Processing OCR..."}
               </>
             ) : (
               manualEntry ? "Search Medicines" : "Process Prescription"
