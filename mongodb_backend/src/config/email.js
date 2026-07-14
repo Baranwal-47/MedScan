@@ -86,6 +86,48 @@ const emailTemplates = {
       </div>
     </div>
   `
+,
+
+  orderUpdate: (name, title, message) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 30px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px;">${title}</h1>
+      </div>
+      <div style="padding: 30px; background: #f9f9f9;">
+        <h2 style="color: #333;">Hi ${name},</h2>
+        <p style="color: #666; line-height: 1.6;">${message}</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.FRONTEND_URL}/my-orders" style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            View My Orders
+          </a>
+        </div>
+      </div>
+    </div>
+  `,
+
+  medicineReminder: (name, medicineName) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 30px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px;">💊 Medicine Reminder</h1>
+      </div>
+      <div style="padding: 30px; background: #f9f9f9;">
+        <h2 style="color: #333;">Hi ${name},</h2>
+        <p style="color: #666; line-height: 1.6; font-size: 16px;">
+          It's time to take <strong>${medicineName}</strong>.
+        </p>
+        <p style="color: #999; font-size: 12px;">
+          You're receiving this because you set a reminder on MedScan. Manage reminders from the My Medicines page.
+        </p>
+      </div>
+    </div>
+  `
 };
 
-module.exports = { sendEmail, emailTemplates };
+// Fire-and-forget wrapper: never lets email failures break the caller,
+// and no-ops when SMTP creds aren't configured.
+const sendEmailSafe = (to, subject, html) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !to) return;
+  sendEmail(to, subject, html).catch(() => {});
+};
+
+module.exports = { sendEmail, sendEmailSafe, emailTemplates };

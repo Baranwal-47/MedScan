@@ -1,4 +1,6 @@
 const Notification = require('../models/Notification');
+const User = require('../models/User');
+const { sendEmailSafe, emailTemplates } = require('../config/email');
 
 const createNotification = async (userId, orderId, type, status, previousStatus = null, metadata = {}) => {
   const statusMessages = {
@@ -48,6 +50,12 @@ const createNotification = async (userId, orderId, type, status, previousStatus 
     });
 
     await notification.save();
+
+    // Mirror the in-app notification to email (fire-and-forget)
+    User.findById(userId).select('name email').then((u) => {
+      if (u) sendEmailSafe(u.email, `MedScan — ${title}`, emailTemplates.orderUpdate(u.name, title, message));
+    }).catch(() => {});
+
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
