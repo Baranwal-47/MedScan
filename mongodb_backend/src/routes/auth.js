@@ -29,30 +29,67 @@ router.post('/register', async (req,res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    const code = String(Math.floor(100000 + Math.random() * 900000));
     const user = await User.create({
-      name, 
+      name,
       email,
       passwordHash: password,
+      emailVerified: false,
+      verifyCode: code,
+      verifyCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
     });
 
-    // Send welcome email
     try {
-      await sendEmail(
-        email,
-        'Welcome to MedScan!',
-        emailTemplates.welcome(name)
-      );
+      await sendEmail(email, 'Your MedScan verification code', emailTemplates.verifyEmail(name, code));
     } catch (emailError) {
-      console.error('Failed to send welcome email:', emailError);
+      // Can't verify without the code — don't strand a half-created account
+      console.error('Failed to send verification email:', emailError);
+      await User.deleteOne({ _id: user._id });
+      return res.status(500).json({ message: "Couldn't send the verification email. Please try again." });
     }
 
-    res.status(201).json({ 
-      message: 'User registered successfully',
-      token: genToken(user._id, user.role) 
+    res.status(201).json({
+      needsVerification: true,
+      message: `We sent a 6-digit code to ${email}. Enter it to activate your account.`
     });
-  } catch (e) { 
+  } catch (e) {
     console.error('Registration error:', e);
-    res.status(500).json({ message: 'Server error during registration' }); 
+    res.status(500).json({ message: 'Server error during registration' });
+  }
+});
+
+/* ---------- Verify email ---------- */
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and code are required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'No account found for this email' });
+    if (user.emailVerified) return res.status(400).json({ message: 'Email is already verified — just sign in' });
+    if (!user.verifyCode || user.verifyCode !== String(code).trim()) {
+      return res.status(400).json({ message: 'Incorrect code' });
+    }
+    if (user.verifyCodeExpires < new Date()) {
+      return res.status(400).json({ message: 'Code expired — sign in to get a new one' });
+    }
+
+    user.emailVerified = true;
+    user.verifyCode = undefined;
+    user.verifyCodeExpires = undefined;
+    await user.save();
+
+    sendEmail(user.email, 'Welcome to MedScan!', emailTemplates.welcome(user.name)).catch(() => {});
+
+    res.json({
+      message: 'Email verified',
+      token: genToken(user._id, user.role)
+    });
+  } catch (e) {
+    console.error('Verification error:', e);
+    res.status(500).json({ message: 'Server error during verification' });
   }
 });
 
@@ -69,8 +106,21 @@ router.post('/login', async (req,res) => {
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    
-    res.json({ 
+
+    if (!user.emailVerified) {
+      // Re-issue a fresh code so the user can complete verification
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      user.verifyCode = code;
+      user.verifyCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
+      await user.save();
+      sendEmail(user.email, 'Your MedScan verification code', emailTemplates.verifyEmail(user.name, code)).catch(() => {});
+      return res.status(403).json({
+        needsVerification: true,
+        message: 'Please verify your email first — we just sent you a new code.'
+      });
+    }
+
+    res.json({
       token: genToken(user._id, user.role), 
       user: {
         id: user._id,

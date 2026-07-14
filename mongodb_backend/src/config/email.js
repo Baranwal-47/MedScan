@@ -105,6 +105,26 @@ const emailTemplates = {
     </div>
   `,
 
+  verifyEmail: (name, code) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 30px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px;">Verify your email</h1>
+      </div>
+      <div style="padding: 30px; background: #f9f9f9; text-align: center;">
+        <h2 style="color: #333;">Hi ${name},</h2>
+        <p style="color: #666; line-height: 1.6;">
+          Enter this code on MedScan to finish creating your account:
+        </p>
+        <p style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #2563eb; margin: 24px 0;">
+          ${code}
+        </p>
+        <p style="color: #999; font-size: 12px;">
+          The code expires in 15 minutes. If you didn't sign up for MedScan, ignore this email.
+        </p>
+      </div>
+    </div>
+  `,
+
   medicineReminder: (name, medicineName) => `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 30px; text-align: center; color: white;">

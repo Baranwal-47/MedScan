@@ -9,6 +9,11 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, default: '' },
   gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
   avatarUrl: { type: String, default: '' },
+  // default true grandfathers accounts created before verification existed;
+  // /register explicitly sets false for new signups
+  emailVerified: { type: Boolean, default: true },
+  verifyCode: String,
+  verifyCodeExpires: Date,
   resetPasswordToken: String,
   resetPasswordExpires: Date,
 }, { timestamps: true });

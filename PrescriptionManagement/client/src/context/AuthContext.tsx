@@ -15,7 +15,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>; // Simplified
+  register: (name: string, email: string, password: string) => Promise<{ needsVerification: boolean; message: string }>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
   logout: () => void;
   updateProfile: (name: string, phone: string, gender: string) => Promise<void>; // Simplified
   updateAvatar: (file: File) => Promise<void>;
@@ -76,7 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.message);
+        const err: any = new Error(error.message);
+        err.needsVerification = !!error.needsVerification;
+        throw err;
       }
 
       const data = await res.json();
@@ -89,6 +92,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Registration no longer returns a token — the account must be activated
+  // via the emailed code first (verifyEmail below).
   const register = async (name: string, email: string, password: string) => {
     setLoading(true);
     try {
@@ -97,13 +102,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password })
       });
-      
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message);
-      }
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      return data as { needsVerification: boolean; message: string };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyEmail = async (email: string, code: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+
       setToken(data.token);
       localStorage.setItem('token', data.token);
       await fetchProfile();
@@ -191,7 +210,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{
-      user, token, login, register, logout, updateProfile, updateAvatar,
+      user, token, login, register, verifyEmail, logout, updateProfile, updateAvatar,
       forgotPassword, resetPassword, loading, isAuthenticated, isAuthReady
     }}>
       {children}

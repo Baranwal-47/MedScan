@@ -38,8 +38,8 @@ const SignupPage: React.FC = () => {
 
     try {
       await register(formData.name, formData.email, formData.password);
-      setSuccess('Account created successfully!');
-      setTimeout(() => navigate('/'), 1500);
+      // Account is created but locked until the emailed code is entered
+      navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
     } catch (err: any) {
       setError(err.message);
     }

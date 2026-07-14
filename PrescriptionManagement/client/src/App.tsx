@@ -21,6 +21,7 @@ import SignupPage from "@/pages/SignUpPage";
 import ProfilePage from "@/pages/ProfilePage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import VerifyEmailPage from "@/pages/VerifyEmailPage";
 
 import CartPage from "@/pages/CartPage";
 import CheckoutPage from "@/pages/CheckoutPage";
@@ -42,6 +43,7 @@ function Router() {
           <Route path="/login" component={LoginPage} />
           <Route path="/signup" component={SignupPage} />
           <Route path="/forgot-password" component={ForgotPasswordPage} />
+          <Route path="/verify-email" component={VerifyEmailPage} />
           <Route path="/reset/:token" component={ResetPasswordPage} />
 
           {/* Protected routes - Authentication required */}

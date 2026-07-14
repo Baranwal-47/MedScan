@@ -19,6 +19,11 @@ const LoginPage: React.FC = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
+      if (err.needsVerification) {
+        // A fresh code was just emailed — take them to the code entry page
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setError(err.message);
     }
   };
