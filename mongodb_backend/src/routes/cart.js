@@ -31,8 +31,13 @@ router.post('/add', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Medicine not found' });
     }
 
-    // Extract numeric price
-    const price = parseFloat(medicine.price.replace(/[^\d.]/g, '')) || 0;
+    // Some scraped medicines have no price — they can't be ordered
+    if (!medicine.price || !medicine.price.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'This medicine is currently unavailable for online ordering'
+      });
+    }
 
     let cart = await Cart.findOne({ user: req.user._id });
 
