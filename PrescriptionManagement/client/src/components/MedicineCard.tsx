@@ -1,13 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'wouter';
 import { Medicine } from '../types/Medicine';
-import { ShieldCheck, ShieldAlert } from 'lucide-react'; // 🆕 Icons for prescription
+import { ShieldCheck, ShieldAlert, ShoppingCart, Check } from 'lucide-react'; // 🆕 Icons for prescription
+import { useCart } from '../context/CartContext';
 
 interface MedicineCardProps {
   medicine: Medicine;
 }
 
 const MedicineCard: React.FC<MedicineCardProps> = ({ medicine }) => {
+  const { addToCart } = useCart();
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    // Card is wrapped in a Link — don't navigate on button click
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      setAdding(true);
+      await addToCart(medicine._id, 1);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2000);
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <Link                                             
       href={`/medicine/${medicine._id}`}
@@ -66,6 +87,20 @@ const MedicineCard: React.FC<MedicineCardProps> = ({ medicine }) => {
               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                 {medicine.letter}
               </span>
+              {medicine.price && (
+                <button
+                  onClick={handleAddToCart}
+                  disabled={adding}
+                  className={`flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                    added
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60'
+                  }`}
+                >
+                  {added ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+                  {added ? 'Added' : adding ? 'Adding…' : 'Add'}
+                </button>
+              )}
             </div>
           </div>
         </div>
