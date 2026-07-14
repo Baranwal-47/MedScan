@@ -194,7 +194,7 @@ router.post('/profile/avatar', protect, upload.single('avatar'), async (req, res
       return res.status(400).json({ message: 'Only image files are allowed' });
     }
 
-    const result = await uploadBuffer(req.file.buffer, 'medscan/avatars', req.file.mimetype);
+    const result = await uploadBuffer(req.file.buffer, 'profile-photos', req.file.mimetype);
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { avatarUrl: result.secure_url },
