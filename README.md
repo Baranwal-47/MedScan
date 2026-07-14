@@ -42,21 +42,7 @@ Real captured run of [`mongodb_backend/scripts/e2e-demo.mjs`](mongodb_backend/sc
 against the handwritten prescription above — scan to paid order, including a signature-verified
 Stripe webhook:
 
-```text
-$ node scripts/e2e-demo.mjs rx.jpg
-PASS | login
-PASS | scan | engine=gemini
-       matched   Augmentin 1000 Duo Tablet  <- "Augmentin · 625mg · 1-0-1 · 5 days"
-       matched   Panday D 10mg/40mg Tablet  <- "Pan-D · 40mg · 1-0-0 · 5 days"
-       not in catalogue: Enzoflam
-       not in catalogue: Hexigel gum paint
-PASS | cart add | total=INR 630
-PASS | order create | #ORD1784033469229222 status=pending_approval prescription=attached
-PASS | payment intent | pi_3Tt5nm05QLy6j9Aq1yvXupcP
-PASS | stripe confirm | status=succeeded
-PASS | webhook | HTTP 200
-PASS | order paid | paymentStatus=completed status=pending_approval
-```
+<p align="center"><img src="assets/demo.gif" width="756" alt="Real e2e-demo.mjs run: scan, match, order, Stripe payment, webhook, paid"/></p>
 
 All four medicines on the page were extracted; the two "not in catalogue" lines are correct —
 those products genuinely aren't in the store, so the UI offers a Tata 1mg search link instead.
