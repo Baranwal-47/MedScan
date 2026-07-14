@@ -157,7 +157,7 @@ const PaymentPage: React.FC = () => {
 
       if (!currentClientSecret) {
         const orderData = await orderAPI.getOrder(orderId!);
-        const stripeResponse = await orderAPI.createStripePaymentIntent(orderData.data.totalAmount);
+        const stripeResponse = await orderAPI.createStripePaymentIntent(orderData.data.totalAmount, orderId!);
 
         currentClientSecret = stripeResponse.data.clientSecret;
         currentPaymentIntentId = stripeResponse.data.paymentIntentId;

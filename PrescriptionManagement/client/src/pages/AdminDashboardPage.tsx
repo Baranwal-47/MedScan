@@ -258,7 +258,18 @@ const AdminDashboardPage: React.FC = () => {
                         {order.prescriptionRequired && (
                           <div className="text-xs text-blue-600">
                             Rx Required - Dr. {order.doctorName}
+                            {order.doctorLicense && ` (${order.doctorLicense})`}
                           </div>
+                        )}
+                        {order.prescription && (
+                          <a
+                            href={order.prescription.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded"
+                          >
+                            View Prescription ↗
+                          </a>
                         )}
                       </div>
                     </td>
@@ -318,7 +329,10 @@ const AdminDashboardPage: React.FC = () => {
                                 : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                             }`}
                           >
-                            {formatStatus(nextStatus)}
+                            {/* Pharmacist wording for the Rx review queue */}
+                            {order.status === 'pending_approval'
+                              ? (nextStatus === 'confirmed' ? 'Approve' : 'Reject')
+                              : formatStatus(nextStatus)}
                           </button>
                         ))}
                       </div>

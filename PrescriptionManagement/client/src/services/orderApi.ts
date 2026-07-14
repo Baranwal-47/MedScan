@@ -6,6 +6,8 @@ export const orderAPI = {
     shippingAddress: ShippingAddress;
     paymentMethod: string;
     doctorName?: string;
+    doctorLicense?: string;
+    prescriptionId?: string;
   }): Promise<{ success: boolean; data: Order }> => {
     const response = await api.post('/orders/create', data);
     return response.data;
@@ -66,7 +68,7 @@ getMedicineHistory: async (medicineId: string): Promise<{
 },
 
 // Create Stripe payment intent
-createStripePaymentIntent: async (amount: number): Promise<{
+createStripePaymentIntent: async (amount: number, orderId?: string): Promise<{
   success: boolean;
   data: {
     clientSecret: string;
@@ -76,7 +78,7 @@ createStripePaymentIntent: async (amount: number): Promise<{
     publishableKey: string;
   };
 }> => {
-  const response = await api.post('/orders/stripe/create-payment-intent', { amount });
+  const response = await api.post('/orders/stripe/create-payment-intent', { amount, orderId });
   return response.data;
 },
 

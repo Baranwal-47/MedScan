@@ -36,6 +36,13 @@ export interface Order {
   status: 'pending_approval' | 'confirmed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
   prescriptionRequired: boolean;
   doctorName?: string;
+  doctorLicense?: string;
+  prescription?: {
+    _id: string;
+    imageUrl: string;
+    status: 'pending' | 'approved' | 'rejected';
+    extractedText?: string;
+  } | null;
   shippingAddress: ShippingAddress;
   paymentStatus: 'pending' | 'completed' | 'failed';
   paymentMethod: 'card' | 'upi' | 'cod';

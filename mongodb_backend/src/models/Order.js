@@ -50,6 +50,15 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: function() { return this.prescriptionRequired; }
   },
+  doctorLicense: {
+    type: String,
+    default: ''
+  },
+  prescription: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Prescription',
+    default: null
+  },
   shippingAddress: {
     name: { type: String, required: true },
     phone: { type: String, required: true },

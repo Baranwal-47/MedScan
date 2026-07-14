@@ -22,6 +22,9 @@ const CheckoutPage: React.FC = () => {
 
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [doctorName, setDoctorName] = useState('');
+  const [doctorLicense, setDoctorLicense] = useState('');
+  // Set by the prescription scanner; attached to the order for pharmacist review
+  const scannedPrescriptionId = sessionStorage.getItem('prescriptionId');
 
   const cartEmpty = !cart || cart.items.length === 0;
 
@@ -77,11 +80,13 @@ const CheckoutPage: React.FC = () => {
       const orderData = {
         shippingAddress,
         paymentMethod,
-        ...(hasRxMedicines && { doctorName })
+        ...(hasRxMedicines && { doctorName, doctorLicense }),
+        ...(hasRxMedicines && scannedPrescriptionId && { prescriptionId: scannedPrescriptionId })
       };
 
       const response = await orderAPI.createOrder(orderData);
       const mongoOrderId = response.data._id;
+      sessionStorage.removeItem('prescriptionId');
 
       // Backend clears cart on order creation; sync local cart state immediately.
       await refreshCart();
@@ -94,7 +99,7 @@ const CheckoutPage: React.FC = () => {
 
       // For card/upi, proceed with Stripe flow
       try {
-        const stripeResponse = await orderAPI.createStripePaymentIntent(cart.totalAmount);
+        const stripeResponse = await orderAPI.createStripePaymentIntent(cart.totalAmount, mongoOrderId);
         const { clientSecret, paymentIntentId, publishableKey } = stripeResponse.data;
 
         // Load Stripe.js dynamically
@@ -224,14 +229,33 @@ const CheckoutPage: React.FC = () => {
                   </p>
                 </div>
                 
-                <input
-                  type="text"
-                  placeholder="Doctor's Name with their License Number (eg. Dr. John Doe, License #123456)"
-                  value={doctorName}
-                  onChange={(e) => setDoctorName(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Doctor's Name (e.g. Dr. John Doe)"
+                    value={doctorName}
+                    onChange={(e) => setDoctorName(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="License Number (e.g. MCI-12345)"
+                    value={doctorLicense}
+                    onChange={(e) => setDoctorLicense(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {scannedPrescriptionId ? (
+                  <p className="mt-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
+                    ✓ Your scanned prescription will be attached to this order for pharmacist review.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm text-gray-500">
+                    Tip: scan your prescription first and it will be attached to this order automatically.
+                  </p>
+                )}
               </div>
             )}
 

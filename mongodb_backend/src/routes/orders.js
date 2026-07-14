@@ -2,7 +2,9 @@ const express = require('express');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Medicine = require('../models/Medicine');
+const Prescription = require('../models/Prescription');
 const protect = require('../middleware/authMiddleware');
+const { createNotification } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -36,7 +38,7 @@ const generateOrderNumber = async () => {
 // Create order from cart
 router.post('/create', protect, async (req, res) => {
   try {
-    const { shippingAddress, paymentMethod, doctorName } = req.body;
+    const { shippingAddress, paymentMethod, doctorName, doctorLicense, prescriptionId } = req.body;
 
     // Validate required fields
     if (!shippingAddress || !shippingAddress.name || !shippingAddress.phone || !shippingAddress.address) {
@@ -81,6 +83,15 @@ router.post('/create', protect, async (req, res) => {
     const estimatedDelivery = new Date();
     estimatedDelivery.setDate(estimatedDelivery.getDate() + (requiresPrescription ? 7 : 3));
 
+    // Attach a scanned prescription if the client provides one it owns
+    let prescription = null;
+    if (prescriptionId) {
+      prescription = await Prescription.findOne({ _id: prescriptionId, user: req.user._id });
+      if (!prescription) {
+        return res.status(400).json({ success: false, message: 'Prescription not found' });
+      }
+    }
+
     const order = new Order({
       user: req.user._id,
       orderNumber, // ✅ Explicitly set the order number
@@ -89,12 +100,21 @@ router.post('/create', protect, async (req, res) => {
       status,
       prescriptionRequired: requiresPrescription,
       doctorName: requiresPrescription ? doctorName : undefined,
+      doctorLicense: doctorLicense || '',
+      prescription: prescription?._id || null,
       shippingAddress,
       paymentMethod,
       estimatedDelivery
     });
 
     await order.save();
+
+    if (prescription) {
+      prescription.order = order._id;
+      await prescription.save();
+    }
+
+    createNotification(req.user._id, order._id, 'order_created', status).catch(() => {});
 
     // Clear cart after order creation
     await Cart.findOneAndDelete({ user: req.user._id });
@@ -228,6 +248,7 @@ router.get('/admin/all', protect, requireAdmin, async (req, res) => {
     const orders = await Order.find(query)
       .populate('items.medicine', 'name price image_url')
       .populate('user', 'name email phone')
+      .populate('prescription', 'imageUrl status extractedText')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -258,6 +279,12 @@ router.put('/admin/:orderId/status', protect, requireAdmin, async (req, res) => 
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
 
+    const existing = await Order.findById(req.params.orderId);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    const previousStatus = existing.status;
+
     const order = await Order.findByIdAndUpdate(
       req.params.orderId,
       { status },
@@ -265,8 +292,15 @@ router.put('/admin/:orderId/status', protect, requireAdmin, async (req, res) => 
     ).populate('items.medicine', 'name price image_url')
      .populate('user', 'name email phone');
 
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+    // Keep the linked prescription's status in sync with the pharmacist decision
+    if (order.prescription && previousStatus === 'pending_approval') {
+      const prescriptionStatus = status === 'cancelled' ? 'rejected'
+        : status !== 'pending_approval' ? 'approved' : 'pending';
+      Prescription.findByIdAndUpdate(order.prescription, { status: prescriptionStatus }).exec();
+    }
+
+    if (status !== previousStatus) {
+      createNotification(order.user._id, order._id, 'order_status_change', status, previousStatus).catch(() => {});
     }
 
     res.json({ success: true, data: order });
@@ -342,7 +376,7 @@ router.get('/medicine-history/:medicineId', protect, async (req, res) => {
 // Stripe: Create payment intent
 router.post('/stripe/create-payment-intent', protect, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, orderId } = req.body;
 
     if (!amount || typeof amount !== 'number' || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Valid amount is required' });
@@ -353,7 +387,8 @@ router.post('/stripe/create-payment-intent', protect, async (req, res) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100),
       currency: 'inr',
-      automatic_payment_methods: { enabled: true }
+      automatic_payment_methods: { enabled: true },
+      metadata: orderId ? { orderId } : {}
     });
 
     res.json({
@@ -400,7 +435,10 @@ router.post('/stripe/verify', protect, async (req, res) => {
     }
 
     order.paymentStatus = 'completed';
-    order.status = 'confirmed';
+    // Rx orders stay in the pharmacist approval queue even after payment
+    if (order.status !== 'pending_approval') {
+      order.status = 'confirmed';
+    }
     order.stripePaymentIntentId = paymentIntentId;
 
     await order.save();
