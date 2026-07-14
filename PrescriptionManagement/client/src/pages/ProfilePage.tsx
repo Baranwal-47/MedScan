@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Save, User, Mail, Phone, Edit3, X } from 'lucide-react';
+import { Save, User, Mail, Phone, Edit3, X, Camera } from 'lucide-react';
 
 const ProfilePage: React.FC = () => {
-  const { user, updateProfile, loading } = useAuth();
+  const { user, updateProfile, updateAvatar, loading } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -44,6 +46,25 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showMessage('Please choose an image file', 'error');
+      return;
+    }
+    try {
+      setUploadingAvatar(true);
+      await updateAvatar(file);
+      showMessage('Profile photo updated!', 'success');
+    } catch (err: any) {
+      showMessage(err.message || 'Failed to upload photo', 'error');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleCancel = () => {
     setEditing(false);
     if (user) {
@@ -71,10 +92,32 @@ const ProfilePage: React.FC = () => {
           <div className="h-36 bg-gradient-to-r from-blue-600 to-purple-600"></div>
           <div className="relative px-6 pb-6">
             <div className="flex items-center -mt-16">
-              <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg flex items-center justify-center">
-                <User className="w-16 h-16 text-gray-400" />
+              <div className="relative group">
+                <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg flex items-center justify-center overflow-hidden">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-16 h-16 text-gray-400" />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute bottom-1 right-1 p-2 bg-blue-600 text-white rounded-full shadow hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  aria-label="Change profile photo"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
               </div>
-              <div className="ml-6 mt-[-15px] flex-1">
+              <div className="ml-6 mt-6 flex-1">
                 <div className="flex items-center justify-between">
                   <div>
                     <h1 className="text-3xl font-bold text-gray-900">{user.name}</h1>

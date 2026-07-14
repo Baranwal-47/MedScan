@@ -18,6 +18,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>; // Simplified
   logout: () => void;
   updateProfile: (name: string, phone: string, gender: string) => Promise<void>; // Simplified
+  updateAvatar: (file: File) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, password: string) => Promise<void>;
   loading: boolean;
@@ -139,6 +140,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateAvatar = async (file: File) => {
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append('avatar', file);
+      const res = await fetch(`${API_BASE}/auth/profile/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Avatar upload failed');
+      }
+
+      const updatedUser = await res.json();
+      setUser(updatedUser);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const forgotPassword = async (email: string) => {
     const res = await fetch(`${API_BASE}/auth/forgot-password`, {
       method: 'POST',
@@ -167,7 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{
-      user, token, login, register, logout, updateProfile,
+      user, token, login, register, logout, updateProfile, updateAvatar,
       forgotPassword, resetPassword, loading, isAuthenticated, isAuthReady
     }}>
       {children}

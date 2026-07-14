@@ -1,11 +1,17 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const multer = require('multer');
 const { sendEmail, emailTemplates } = require('../config/email');
+const { uploadBuffer } = require('../config/cloudinary');
 const User = require('../models/User');
 const protect = require('../middleware/authMiddleware');
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 /* ---------- Helpers ---------- */
 const genToken = (id, role) => jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn:'1d' });
@@ -72,7 +78,8 @@ router.post('/login', async (req,res) => {
         email: user.email,
         role: user.role,
         phone: user.phone,
-        gender: user.gender
+        gender: user.gender,
+        avatarUrl: user.avatarUrl
       }
     });
   } catch (e) {
@@ -163,17 +170,41 @@ router.get('/profile', protect, (req,res) => {
 router.put('/profile', protect, async (req,res) => {
   try {
     const { name, phone, gender } = req.body;
-    
+
     const user = await User.findByIdAndUpdate(
-      req.user._id, 
-      { name, phone, gender }, 
+      req.user._id,
+      { name, phone, gender },
       { new: true, runValidators: true }
     ).select('-passwordHash');
-    
+
     res.json(user);
   } catch (e) {
     console.error('Profile update error:', e);
     res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+/* ---------- Avatar upload (Cloudinary) ---------- */
+router.post('/profile/avatar', protect, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Image file is required' });
+    }
+    if (!req.file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image files are allowed' });
+    }
+
+    const result = await uploadBuffer(req.file.buffer, 'medscan/avatars', req.file.mimetype);
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { avatarUrl: result.secure_url },
+      { new: true }
+    ).select('-passwordHash');
+
+    res.json(user);
+  } catch (e) {
+    console.error('Avatar upload error:', e);
+    res.status(500).json({ message: 'Failed to upload avatar' });
   }
 });
 
