@@ -147,7 +147,7 @@ const MedicineDetailPage: React.FC = () => {
                         <button
                           onClick={handleAddToCart}
                           disabled={addingToCart}
-                          className="w-full bg-primary-600 text-white bg-blue-500 py-3 px-6 rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full bg-primary-600 text-white py-3 px-6 rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <ShoppingCart className="w-5 h-5" />
                           <span>{addingToCart ? 'Adding...' : 'Add to Cart'}</span>

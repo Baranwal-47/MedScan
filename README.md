@@ -4,6 +4,7 @@
 
 **Photograph a doctor's handwritten prescription and check out with the right medicines in under a minute — vision-LLM OCR, a 3,023-medicine catalogue, Stripe payments, and a pharmacist approval queue, verified end-to-end against a real dental prescription.**
 
+![Catalogue](https://img.shields.io/badge/Catalogue-3,023_medicines_scraped_from_1mg-2563eb?logo=databricks&logoColor=white&labelColor=0d1117)
 ![React](https://img.shields.io/badge/React_18-TypeScript-61DAFB?logo=react&logoColor=white&labelColor=0d1117)
 ![Node](https://img.shields.io/badge/Express-MongoDB_Atlas-3fb950?logo=node.js&logoColor=white&labelColor=0d1117)
 ![Gemini](https://img.shields.io/badge/OCR-Gemini_Vision-39c5cf?logo=googlegemini&logoColor=white&labelColor=0d1117)
@@ -18,10 +19,15 @@
 
 MedScan is a full e-pharmacy: a patient photographs a prescription, a vision LLM reads the
 handwriting and returns each medicine with its dosage and schedule, matched items go straight
-into a cart backed by a 3,023-medicine catalogue scraped from 1mg, payment runs through Stripe,
-and prescription-required orders are held for a pharmacist who reviews the original image
-before approving. Reminders then nag the patient by email and in-app notification at the times
-they picked.
+into a cart, payment runs through Stripe, and prescription-required orders are held for a
+pharmacist who reviews the original image before approving. Reminders then nag the patient by
+email and in-app notification at the times they picked.
+
+The store behind it is a real dataset, not seed data: **3,023 medicines scraped from 1mg with
+a Puppeteer pipeline** — name, composition, manufacturer, price, prescription flag, and product
+images — searchable and filterable like any e-commerce catalogue:
+
+<p align="center"><img src="assets/store.png" alt="Medicine Store: search, Rx and A-Z filters over the 3,023-item scraped catalogue with add-to-cart"/></p>
 
 This is the app reading an actual handwritten dental prescription — schedule-level accuracy
 ("Pan-D · 40mg · 1-0-0 (before meals) · 5 days" recovered from cursive):
@@ -61,6 +67,8 @@ built-in retry absorbs transient 503s.
 
 ## Highlights
 
+- **Self-built catalogue** — a Puppeteer scraper (in `scraping_backend/`) harvested all 3,023
+  medicines with metadata and images from 1mg; nothing in the store is placeholder data.
 - **Vision-LLM OCR with structured extraction** — not a text dump: each medicine arrives as
   `{name, dosage, frequency, duration}`, with handwriting misreads corrected by the model itself.
 - **Hand-built fuzzy medicine matcher** — dose-form prefix stripping (`Tab.`/`Cap.`/`Inj.`),
@@ -79,10 +87,7 @@ built-in retry absorbs transient 503s.
 - **Admin analytics** — MongoDB aggregation endpoint (orders by status, paid revenue, top
   medicines) feeding a dashboard with a colorblind-validated status palette.
 
-<p align="center">
-<img src="assets/admin-dashboard.png" width="49%" alt="Admin dashboard with order pipeline and top medicines"/>
-<img src="assets/store.png" width="49%" alt="Medicine store: search, Rx filters, and the 3,023-item catalogue"/>
-</p>
+<p align="center"><img src="assets/admin-dashboard.png" width="720" alt="Admin dashboard with order pipeline and top medicines"/></p>
 
 ## Architecture
 

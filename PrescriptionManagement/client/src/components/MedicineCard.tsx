@@ -100,9 +100,11 @@ const MedicineCard: React.FC<MedicineCardProps> = ({ medicine }) => {
               </span>
             )}
             <div className="flex items-center space-x-2">
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                {medicine.letter}
-              </span>
+              {medicine.letter && (
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  {medicine.letter}
+                </span>
+              )}
               {medicine.price && (
                 <button
                   onClick={handleAddToCart}
