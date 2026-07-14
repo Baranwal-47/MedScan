@@ -12,29 +12,56 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+// Dosage-form / instruction prefixes that precede the actual brand name.
+const DOSE_FORM = /^(tab|tabs|cap|caps|inj|syp|syr|susp|oint|gel|cream|drops?|adv|rx)[.\s:,-]+/i;
+
 // Pull medicine-name candidates out of raw OCR text.
 const candidateLines = (text) =>
   Array.from(new Set(
     text
       .split(/\r?\n/)
-      .map(l => l.replace(/^[\s\d.\-•*)]+/, '').trim())
-      .filter(l => l.length >= 3 && /[a-zA-Z]{3,}/.test(l))
+      // braces group meal instructions ("after meals { Tab. X") — split them off
+      .flatMap(l => l.split(/[{}]/))
+      .map(l => l.replace(/^[\s\d.\-•*)|—]+/, '').replace(DOSE_FORM, '').trim())
+      // needs a real word, and skip contact/header lines
+      .filter(l => /[a-zA-Z]{4,}/.test(l) && !/www\.|@|\||https?:|ph[.:]/i.test(l))
   )).slice(0, 10);
 
-// Match candidate names against the catalogue (regex prefix/substring search,
-// same approach as /medicines/search).
+const escapeRx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Match candidate names against the catalogue. Handwritten OCR often misreads
+// a single letter ("Angmentin" for Augmentin), so after an exact prefix match
+// we retry with one-character tolerance on the brand word.
+// ponytail: single-substitution regex fuzz; swap for a text index + trigram
+// search if matching quality still disappoints.
 const matchAgainstCatalogue = async (names) => {
   const matched = [];
   const unmatched = [];
+  const find = (pattern) =>
+    Medicine.findOne({ name: { $regex: pattern, $options: 'i' } })
+      .select('name price image_url prescriptionRequired manufacturer');
+
   for (const query of names) {
-    // Try the first word (usually the brand name) and the full line
-    const firstWord = query.split(/\s+/)[0];
-    const med = await Medicine.findOne({
-      $or: [
-        { name: { $regex: `^${firstWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, $options: 'i' } },
-        { name: { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } }
-      ]
-    }).select('name price image_url prescriptionRequired manufacturer');
+    const firstWord = query.split(/\s+/)[0].replace(/[^a-zA-Z-]/g, '');
+    let med = null;
+
+    if (firstWord.length >= 4) {
+      // 1. exact prefix on the brand word
+      med = await find(`^${escapeRx(firstWord)}`);
+      // 2. one wrong/extra trailing char: prefix of the first 6 letters
+      if (!med && firstWord.length >= 6) med = await find(`^${escapeRx(firstWord.slice(0, 6))}`);
+      // 3. one misread char anywhere: try each position as a wildcard.
+      // 4-letter fragments fuzz-match everything, so only allow them when
+      // the line carries a dose ("ParD 40ng") — a strong medicine signal.
+      const hasDose = /\d+\s*(mg|mcg|ml|g|ng|iu)\b/i.test(query);
+      if (!med && (firstWord.length >= 5 || (firstWord.length === 4 && hasDose))) {
+        const variants = [];
+        for (let i = 1; i < Math.min(firstWord.length, 12); i++) {
+          variants.push(`^${escapeRx(firstWord.slice(0, i))}.${escapeRx(firstWord.slice(i + 1))}`);
+        }
+        med = await find(variants.join('|'));
+      }
+    }
 
     if (med) matched.push({ medicine: med, query });
     else unmatched.push(query);
@@ -54,7 +81,7 @@ router.post('/scan', protect, upload.single('image'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'Only image files are allowed' });
     }
 
-    const uploaded = await uploadBuffer(req.file.buffer, 'medscan/prescriptions', req.file.mimetype);
+    const uploaded = await uploadBuffer(req.file.buffer, 'prescriptions', req.file.mimetype);
 
     let { text, engine } = await extractText(req.file.buffer, req.file.mimetype);
     if (!text.trim() && req.body.clientText?.trim()) {
