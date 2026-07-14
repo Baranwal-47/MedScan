@@ -9,11 +9,11 @@ const notificationSchema = new mongoose.Schema({
   order: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',
-    required: true
+    default: null
   },
   type: {
     type: String,
-    enum: ['order_status_change', 'order_created', 'order_delivered', 'prescription_approved'],
+    enum: ['order_status_change', 'order_created', 'order_delivered', 'prescription_approved', 'medicine_reminder'],
     required: true
   },
   title: {
@@ -27,7 +27,7 @@ const notificationSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['pending_approval', 'confirmed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'],
-    required: true
+    required: function() { return this.type !== 'medicine_reminder'; }
   },
   previousStatus: {
     type: String,

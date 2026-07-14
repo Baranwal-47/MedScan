@@ -43,7 +43,7 @@ const createNotification = async (userId, orderId, type, status, previousStatus 
       title,
       message,
       status,
-      previousStatus,
+      ...(previousStatus && { previousStatus }),
       metadata
     });
 
