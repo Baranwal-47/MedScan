@@ -383,10 +383,12 @@ const PaymentPage: React.FC = () => {
             </div>
 
             <div className="mt-6 text-center">
-              <div className="flex justify-center space-x-4 mb-2">
-                <img src="/api/placeholder/40/25" alt="Visa" className="h-6" />
-                <img src="/api/placeholder/40/25" alt="Mastercard" className="h-6" />
-                <img src="/api/placeholder/40/25" alt="UPI" className="h-6" />
+              <div className="flex justify-center space-x-3 mb-2">
+                {['Visa', 'Mastercard', 'RuPay', 'UPI'].map((n) => (
+                  <span key={n} className="text-xs font-semibold text-gray-400 border border-gray-200 rounded px-2 py-1">
+                    {n}
+                  </span>
+                ))}
               </div>
               <p className="text-xs text-gray-500">
                 Your payment information is secure and encrypted

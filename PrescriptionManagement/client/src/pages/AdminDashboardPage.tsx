@@ -316,7 +316,7 @@ const AdminDashboardPage: React.FC = () => {
                         </div>
                         {order.prescriptionRequired && (
                           <div className="text-xs text-blue-600">
-                            Rx Required - Dr. {order.doctorName}
+                            Rx Required - {order.doctorName}
                             {order.doctorLicense && ` (${order.doctorLicense})`}
                           </div>
                         )}

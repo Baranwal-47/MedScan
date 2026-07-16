@@ -28,10 +28,12 @@ const CheckoutPage: React.FC = () => {
 
   const cartEmpty = !cart || cart.items.length === 0;
 
-  // Redirect after render, not during it (React warns otherwise)
+  // Redirect after render, not during it (React warns otherwise).
+  // Skip while submitting: order creation empties the cart, and this
+  // redirect would race the navigation to the payment page.
   useEffect(() => {
-    if (cartEmpty) navigate('/cart');
-  }, [cartEmpty]);
+    if (cartEmpty && !loading) navigate('/cart');
+  }, [cartEmpty, loading]);
 
   if (cartEmpty) return null;
 
